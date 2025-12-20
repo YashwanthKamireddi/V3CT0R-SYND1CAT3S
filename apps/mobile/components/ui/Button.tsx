@@ -14,10 +14,11 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 import { theme } from '../../lib/constants/theme';
 
@@ -66,11 +67,18 @@ export function Button({
   }));
 
   const handlePressIn = () => {
-    scale.value = withSpring(theme.animation.scale.pressed, theme.animation.spring);
+    scale.value = withTiming(0.96, { duration: 100 });
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1, theme.animation.spring);
+    scale.value = withTiming(1, { duration: 150 });
+  };
+
+  const handlePress = () => {
+    if (!isDisabled && onPress) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onPress();
+    }
   };
 
   const sizeConfig = theme.components.button[size];
@@ -184,7 +192,7 @@ export function Button({
   if (variant === 'primary' && gradient && !isDisabled) {
     return (
       <AnimatedPressable
-        onPress={onPress}
+        onPress={handlePress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         disabled={isDisabled}
@@ -204,7 +212,7 @@ export function Button({
 
   return (
     <AnimatedPressable
-      onPress={onPress}
+      onPress={handlePress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       disabled={isDisabled}
@@ -244,11 +252,18 @@ export function IconButton({
   }));
 
   const handlePressIn = () => {
-    scale.value = withSpring(0.9, theme.animation.spring);
+    scale.value = withTiming(0.9, { duration: 100 });
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1, theme.animation.spring);
+    scale.value = withTiming(1, { duration: 150 });
+  };
+
+  const handlePress = () => {
+    if (!disabled && onPress) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onPress();
+    }
   };
 
   const buttonSize = theme.components.iconButton[size];
@@ -287,7 +302,7 @@ export function IconButton({
 
   return (
     <AnimatedPressable
-      onPress={onPress}
+      onPress={handlePress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       disabled={disabled}
@@ -333,11 +348,18 @@ export function FAB({
   }));
 
   const handlePressIn = () => {
-    scale.value = withSpring(0.9, theme.animation.spring);
+    scale.value = withTiming(0.9, { duration: 100 });
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1, theme.animation.spring);
+    scale.value = withTiming(1, { duration: 150 });
+  };
+
+  const handlePress = () => {
+    if (onPress) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onPress();
+    }
   };
 
   const getPositionStyle = (): ViewStyle => {
@@ -353,7 +375,7 @@ export function FAB({
 
   return (
     <AnimatedPressable
-      onPress={onPress}
+      onPress={handlePress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       style={[

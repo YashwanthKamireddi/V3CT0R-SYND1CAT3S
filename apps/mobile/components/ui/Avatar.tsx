@@ -1,14 +1,24 @@
 /**
- * Avatar Component - Evenro Design System
+ * Avatar Component - CampusPulse Design System
  * User avatars with stacking support for attendee lists
  */
 
 import React from 'react';
 import { View, Image, Text, ViewStyle, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { theme } from '../../lib/constants/theme';
+import { tokens } from '../../lib/styles/unified';
 
 export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+
+// Avatar size values
+const AVATAR_SIZES: Record<AvatarSize, number> = {
+  xs: 24,
+  sm: 32,
+  md: 40,
+  lg: 48,
+  xl: 64,
+  '2xl': 80,
+};
 
 interface AvatarProps {
   source?: string | { uri: string };
@@ -25,11 +35,11 @@ export const Avatar: React.FC<AvatarProps> = ({
   name,
   size = 'md',
   showBadge = false,
-  badgeColor = theme.colors.semantic.success,
+  badgeColor = tokens.colors.success,
   onPress,
   style,
 }) => {
-  const sizeValue = theme.components.avatar[size];
+  const sizeValue = AVATAR_SIZES[size];
   const fontSize = sizeValue * 0.4;
   const badgeSize = sizeValue * 0.3;
 
@@ -51,7 +61,7 @@ export const Avatar: React.FC<AvatarProps> = ({
           width: sizeValue,
           height: sizeValue,
           borderRadius: sizeValue / 2,
-          backgroundColor: theme.colors.primary[100],
+          backgroundColor: tokens.colors.primaryLight,
           alignItems: 'center',
           justifyContent: 'center',
           overflow: 'hidden',
@@ -69,8 +79,8 @@ export const Avatar: React.FC<AvatarProps> = ({
         <Text
           style={{
             fontSize,
-            fontWeight: theme.typography.fontWeight.semibold as any,
-            color: theme.colors.primary[500],
+            fontWeight: '600',
+            color: tokens.colors.primary,
           }}
         >
           {getInitials(name)}
@@ -88,7 +98,7 @@ export const Avatar: React.FC<AvatarProps> = ({
             borderRadius: badgeSize / 2,
             backgroundColor: badgeColor,
             borderWidth: 2,
-            borderColor: theme.colors.background.primary,
+            borderColor: tokens.colors.background.primary,
           }}
         />
       )}
@@ -125,7 +135,7 @@ export const AvatarStack: React.FC<AvatarStackProps> = ({
   onPress,
   style,
 }) => {
-  const sizeValue = theme.components.avatar[size];
+  const sizeValue = AVATAR_SIZES[size];
   const overlap = sizeValue * 0.3;
   const visibleAvatars = avatars.slice(0, max);
   const remainingCount = avatars.length - max;
@@ -147,7 +157,7 @@ export const AvatarStack: React.FC<AvatarStackProps> = ({
               size={size}
               style={{
                 borderWidth: 2,
-                borderColor: theme.colors.background.primary,
+                borderColor: tokens.colors.background.primary,
               }}
             />
           </View>
@@ -160,18 +170,18 @@ export const AvatarStack: React.FC<AvatarStackProps> = ({
               width: sizeValue,
               height: sizeValue,
               borderRadius: sizeValue / 2,
-              backgroundColor: theme.colors.neutral[200],
+              backgroundColor: tokens.colors.background.tertiary,
               alignItems: 'center',
               justifyContent: 'center',
               borderWidth: 2,
-              borderColor: theme.colors.background.primary,
+              borderColor: tokens.colors.background.primary,
             }}
           >
             <Text
               style={{
                 fontSize: sizeValue * 0.35,
-                fontWeight: theme.typography.fontWeight.semibold as any,
-                color: theme.colors.text.secondary,
+                fontWeight: '600',
+                color: tokens.colors.text.secondary,
               }}
             >
               +{remainingCount}
@@ -183,9 +193,9 @@ export const AvatarStack: React.FC<AvatarStackProps> = ({
       {showCount && countText && (
         <Text
           style={{
-            marginLeft: theme.spacing.sm,
-            fontSize: theme.typography.fontSize.xs,
-            color: theme.colors.text.tertiary,
+            marginLeft: tokens.spacing[2],
+            fontSize: tokens.typography.size.xs,
+            color: tokens.colors.text.tertiary,
           }}
         >
           {countText}

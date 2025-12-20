@@ -9,7 +9,7 @@ import { Feather } from '@expo/vector-icons';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 import { theme } from '../../lib/constants/theme';
 
@@ -53,12 +53,12 @@ export const Chip: React.FC<ChipProps> = ({
 
   const handlePressIn = () => {
     if (!disabled) {
-      scale.value = withSpring(0.95, theme.animation.spring);
+      scale.value = withTiming(0.95, { duration: 100 });
     }
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1, theme.animation.spring);
+    scale.value = withTiming(1, { duration: 150 });
   };
 
   const sizeConfig = theme.components.chip[size];
@@ -232,11 +232,11 @@ export const InterestTag: React.FC<InterestTagProps> = ({
   }));
 
   const handlePressIn = () => {
-    scale.value = withSpring(0.95, theme.animation.spring);
+    scale.value = withTiming(0.95, { duration: 100 });
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1, theme.animation.spring);
+    scale.value = withTiming(1, { duration: 150 });
   };
 
   return (

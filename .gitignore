@@ -1,0 +1,56 @@
+# ============================================
+# CampusPulse - Root .gitignore
+# ============================================
+
+# Documentation files (analysis/planning docs)
+DEVELOPMENT_SUMMARY.md
+IMPLEMENTATION_ROADMAP.md
+QUICK_START.md
+UI_UX_ANALYSIS_PLAN.md
+VISUAL_DESIGN_GUIDE.md
+V3CT0R SYNDICATE5 (1).md
+
+# Figma exports and design files
+Event Booking App- Evenro (Community)/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor directories and files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Dependencies (root level)
+node_modules/
+
+# Build outputs
+dist/
+build/
+out/
+
+# Temporary files
+tmp/
+temp/
+*.tmp

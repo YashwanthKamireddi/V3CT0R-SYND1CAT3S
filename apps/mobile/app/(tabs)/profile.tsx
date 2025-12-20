@@ -1,135 +1,605 @@
-import { View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Link, useRouter } from 'expo-router';
+/**
+ * Profile Screen - CampusPulse Design System
+ * Production-ready with unified typography and layout
+ */
 
+import React from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  Image,
+  StyleSheet,
+  Switch,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import Animated, {
+  FadeInDown,
+  FadeInRight,
+  useAnimatedStyle,
+  withTiming,
+  useSharedValue,
+} from 'react-native-reanimated';
+
+import { tokens, layout } from '@/lib/styles/unified';
+
+// Student Profile Data
 const USER = {
-    name: 'Yash Sharma',
-    email: 'yash@university.edu',
-    department: 'Computer Science',
-    year: 'Year 3',
-    avatar: '👨‍🎓',
+  name: 'Yashwanth Kamireddi',
+  email: 'yashwanth.k@srmist.edu.in',
+  avatar: 'https://i.pravatar.cc/200?img=12',
+  phone: '+91 63026 83827',
+  memberSince: 'Aug 2023',
+  department: 'Computer Science & Engineering',
+  year: '2nd Year',
+  regNo: '2023002748',
 };
 
+// Campus Activity Stats - Meaningful University Metrics
 const STATS = [
-    { label: 'Events', value: '12', icon: '🎫', color: '#7C3AED' },
-    { label: 'Points', value: '850', icon: '⭐', color: '#F59E0B' },
-    { label: 'Rank', value: '#7', icon: '🏆', color: '#10B981' },
+  { id: '1', label: 'Events Attended', value: '18', icon: 'calendar' as const },
+  { id: '2', label: 'Campus Points', value: '1,250', icon: 'award' as const },
+  { id: '3', label: 'Campus Rank', value: '#47', icon: 'trending-up' as const },
 ];
 
-const BADGES = [
-    { id: '1', name: 'Early Adopter', icon: '🚀', rarity: 'Rare', color: '#3B82F6' },
-    { id: '2', name: 'Hackathon Winner', icon: '💻', rarity: 'Epic', color: '#A855F7' },
-    { id: '3', name: 'Social Butterfly', icon: '🦋', rarity: 'Uncommon', color: '#10B981' },
+// Menu Items
+interface MenuItem {
+  id: string;
+  icon: keyof typeof Feather.glyphMap;
+  label: string;
+  subtitle?: string;
+  route?: string;
+  hasSwitch?: boolean;
+  switchValue?: boolean;
+  color?: string;
+}
+
+const MENU_SECTIONS: { title: string; items: MenuItem[] }[] = [
+  {
+    title: 'Campus Activity',
+    items: [
+      { id: '1', icon: 'award', label: 'My Achievements', subtitle: '12 badges earned', route: '/profile/achievements' },
+      { id: '2', icon: 'users', label: 'My Clubs', subtitle: '4 clubs joined', route: '/profile/clubs' },
+      { id: '3', icon: 'gift', label: 'Rewards Store', subtitle: '1,250 points available', route: '/profile/rewards' },
+    ],
+  },
+  {
+    title: 'Account',
+    items: [
+      { id: '4', icon: 'user', label: 'Edit Profile', subtitle: 'Update your information', route: '/profile/edit' },
+      { id: '5', icon: 'bell', label: 'Notifications', hasSwitch: true, switchValue: true },
+      { id: '6', icon: 'moon', label: 'Dark Mode', hasSwitch: true, switchValue: false },
+    ],
+  },
+  {
+    title: 'Support',
+    items: [
+      { id: '7', icon: 'help-circle', label: 'Help Center', route: '/help' },
+      { id: '8', icon: 'message-circle', label: 'Feedback', route: '/feedback' },
+      { id: '9', icon: 'shield', label: 'Privacy Policy', route: '/privacy' },
+    ],
+  },
 ];
 
-const MENU_ITEMS = [
-    { id: '1', title: 'My Events', icon: 'calendar', route: '/(tabs)/tickets' },
-    { id: '2', title: 'Achievements', icon: 'trophy', route: '/leaderboard/index' },
-    { id: '3', title: 'Settings', icon: 'cog', route: '/auth/login' },
-    { id: '4', title: 'Help & Support', icon: 'question-circle', route: null },
-];
+// Stat Card Component
+interface StatCardProps {
+  stat: typeof STATS[0];
+  index: number;
+  onPress: () => void;
+}
+
+function StatCard({ stat, index, onPress }: StatCardProps) {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withTiming(0.95, { duration: 100 });
+  };
+
+  const handlePressOut = () => {
+    scale.value = withTiming(1, { duration: 150 });
+  };
+
+  const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onPress();
+  };
+
+  return (
+    <Animated.View entering={FadeInDown.delay(100 + index * 80).duration(400)}>
+      <Pressable
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        onPress={handlePress}
+      >
+        <Animated.View style={[styles.statCard, animatedStyle]}>
+          <View style={styles.statIconContainer}>
+            <Feather name={stat.icon} size={20} color={tokens.colors.primary} />
+          </View>
+          <Text style={styles.statValue}>{stat.value}</Text>
+          <Text style={styles.statLabel}>{stat.label}</Text>
+        </Animated.View>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+// Menu Item Component
+interface MenuItemProps {
+  item: MenuItem;
+  isLast: boolean;
+  onPress: () => void;
+}
+
+function MenuItemRow({ item, isLast, onPress }: MenuItemProps) {
+  const [switchValue, setSwitchValue] = React.useState(item.switchValue || false);
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withTiming(0.98, { duration: 100 });
+  };
+
+  const handlePressOut = () => {
+    scale.value = withTiming(1, { duration: 150 });
+  };
+
+  const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onPress();
+  };
+
+  const handleSwitchChange = (value: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSwitchValue(value);
+  };
+
+  return (
+    <Pressable
+      onPress={handlePress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      disabled={item.hasSwitch}
+    >
+      <Animated.View
+        style={[
+          styles.menuItem,
+          !isLast && styles.menuItemBorder,
+          animatedStyle,
+        ]}
+      >
+        <View style={[styles.menuIconContainer, item.color && { backgroundColor: item.color }]}>
+          <Feather
+            name={item.icon}
+            size={18}
+            color={item.color ? '#FFFFFF' : tokens.colors.text.secondary}
+          />
+        </View>
+        <View style={styles.menuContent}>
+          <Text style={[styles.menuLabel, item.color && { color: item.color }]}>
+            {item.label}
+          </Text>
+          {item.subtitle && (
+            <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
+          )}
+        </View>
+        {item.hasSwitch ? (
+          <Switch
+            value={switchValue}
+            onValueChange={handleSwitchChange}
+            trackColor={{ false: tokens.colors.border.light, true: tokens.colors.primaryLight }}
+            thumbColor={switchValue ? tokens.colors.primary : '#FFFFFF'}
+          />
+        ) : (
+          <Feather name="chevron-right" size={20} color={tokens.colors.text.tertiary} />
+        )}
+      </Animated.View>
+    </Pressable>
+  );
+}
 
 export default function ProfileScreen() {
-    const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
 
-    return (
-        <View className="flex-1 bg-gray-50">
-            <SafeAreaView className="flex-1">
-                <ScrollView showsVerticalScrollIndicator={false}>
-                    {/* Header */}
-                    <View className="px-5 pt-4 pb-2 flex-row justify-between items-center">
-                        <Text className="text-gray-900 text-2xl font-bold">Profile</Text>
-                        <TouchableOpacity
-                            onPress={() => router.push('/auth/login')}
-                            className="w-10 h-10 bg-white rounded-full items-center justify-center shadow-sm border border-gray-100"
-                        >
-                            <FontAwesome name="cog" size={18} color="#6B7280" />
-                        </TouchableOpacity>
-                    </View>
+  const handleLogout = () => {
+    router.replace('/auth/login');
+  };
 
-                    {/* Profile Card */}
-                    <View className="px-5 py-4">
-                        <Card variant="elevated" className="items-center py-6">
-                            <View className="w-20 h-20 bg-primary-100 rounded-full items-center justify-center mb-3 border-2 border-primary-500">
-                                <Text className="text-4xl">{USER.avatar}</Text>
-                            </View>
-                            <Text className="text-gray-900 text-xl font-bold">{USER.name}</Text>
-                            <Text className="text-gray-500 text-sm">{USER.department} • {USER.year}</Text>
-                            <Text className="text-primary-500 text-sm mt-1">{USER.email}</Text>
+  return (
+    <View style={styles.container}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <Animated.View
+          entering={FadeInDown.duration(400)}
+          style={[styles.header, { paddingTop: insets.top + 16 }]}
+        >
+          <Text style={styles.headerTitle}>Profile</Text>
+          <Pressable
+            style={styles.settingsButton}
+            onPress={() => router.push('/settings' as any)}
+          >
+            <Feather name="settings" size={22} color={tokens.colors.text.primary} />
+          </Pressable>
+        </Animated.View>
 
-                            <View className="flex-row mt-4 gap-3">
-                                <Button title="Edit Profile" variant="outline" size="sm" />
-                                <Button title="Share" variant="ghost" size="sm" />
-                            </View>
-                        </Card>
-                    </View>
+        {/* Profile Card */}
+        <Animated.View
+          entering={FadeInDown.delay(100).duration(400)}
+          style={styles.profileCard}
+        >
+          <View style={styles.avatarContainer}>
+            <Image source={{ uri: USER.avatar }} style={styles.avatar} />
+            <Pressable style={styles.editAvatarButton}>
+              <Feather name="camera" size={16} color="#FFFFFF" />
+            </Pressable>
+          </View>
+          <Text style={styles.userName}>{USER.name}</Text>
+          <Text style={styles.userEmail}>{USER.email}</Text>
 
-                    {/* Stats */}
-                    <View className="px-5 py-2">
-                        <View className="flex-row gap-3">
-                            {STATS.map((stat) => (
-                                <Card key={stat.label} variant="outlined" className="flex-1 items-center py-4">
-                                    <Text className="text-2xl mb-1">{stat.icon}</Text>
-                                    <Text style={{ color: stat.color }} className="font-bold text-xl">{stat.value}</Text>
-                                    <Text className="text-gray-500 text-xs">{stat.label}</Text>
-                                </Card>
-                            ))}
-                        </View>
-                    </View>
+          {/* Registration Number Badge */}
+          <View style={styles.regNoBadge}>
+            <Feather name="hash" size={12} color={tokens.colors.primary} />
+            <Text style={styles.regNoText}>{USER.regNo}</Text>
+          </View>
 
-                    {/* Badges */}
-                    <View className="px-5 py-4">
-                        <View className="flex-row justify-between items-center mb-3">
-                            <Text className="text-gray-900 font-semibold">Badges</Text>
-                            <Link href="/leaderboard/index" asChild>
-                                <TouchableOpacity>
-                                    <Text className="text-primary-500 text-sm">View all</Text>
-                                </TouchableOpacity>
-                            </Link>
-                        </View>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                            {BADGES.map((badge) => (
-                                <View key={badge.id} className="mr-3 items-center">
-                                    <View
-                                        style={{ borderColor: badge.color }}
-                                        className="w-16 h-16 bg-white rounded-2xl items-center justify-center border-2 shadow-sm mb-2"
-                                    >
-                                        <Text className="text-2xl">{badge.icon}</Text>
-                                    </View>
-                                    <Text className="text-gray-900 text-xs font-medium text-center" numberOfLines={1}>
-                                        {badge.name}
-                                    </Text>
-                                    <Text style={{ color: badge.color }} className="text-[10px] font-bold">{badge.rarity}</Text>
-                                </View>
-                            ))}
-                        </ScrollView>
-                    </View>
+          {/* Department & Year */}
+          <View style={styles.academicInfo}>
+            <View style={styles.academicBadge}>
+              <Feather name="book" size={12} color={tokens.colors.text.secondary} />
+              <Text style={styles.academicText}>{USER.department}</Text>
+            </View>
+            <View style={styles.academicBadge}>
+              <Feather name="calendar" size={12} color={tokens.colors.text.secondary} />
+              <Text style={styles.academicText}>{USER.year}</Text>
+            </View>
+          </View>
 
-                    {/* Menu */}
-                    <View className="px-5 py-4 pb-24">
-                        <Text className="text-gray-900 font-semibold mb-3">Quick Actions</Text>
-                        <Card variant="outlined" className="p-0 overflow-hidden">
-                            {MENU_ITEMS.map((item, index) => (
-                                <TouchableOpacity
-                                    key={item.id}
-                                    onPress={() => item.route && router.push(item.route as any)}
-                                    className={`flex-row items-center px-4 py-4 ${index < MENU_ITEMS.length - 1 ? 'border-b border-gray-100' : ''
-                                        }`}
-                                >
-                                    <View className="w-10 h-10 bg-gray-100 rounded-lg items-center justify-center mr-3">
-                                        <FontAwesome name={item.icon as any} size={18} color="#6B7280" />
-                                    </View>
-                                    <Text className="flex-1 text-gray-900 font-medium">{item.title}</Text>
-                                    <FontAwesome name="chevron-right" size={14} color="#9CA3AF" />
-                                </TouchableOpacity>
-                            ))}
-                        </Card>
-                    </View>
-                </ScrollView>
-            </SafeAreaView>
+          <View style={styles.memberSinceContainer}>
+            <Feather name="award" size={14} color={tokens.colors.primary} />
+            <Text style={styles.memberSinceText}>
+              Member since {USER.memberSince}
+            </Text>
+          </View>
+          <Pressable
+            style={styles.editProfileButton}
+            onPress={() => router.push('/profile/edit' as any)}
+          >
+            <Text style={styles.editProfileText}>Edit Profile</Text>
+          </Pressable>
+        </Animated.View>
+
+        {/* Stats */}
+        <View style={styles.statsContainer}>
+          {STATS.map((stat, index) => (
+            <StatCard
+              key={stat.id}
+              stat={stat}
+              index={index}
+              onPress={() => {
+                if (stat.id === '1') router.push('/tickets');
+                else if (stat.id === '2') router.push('/leaderboard');
+                else if (stat.id === '3') router.push('/leaderboard');
+              }}
+            />
+          ))}
         </View>
-    );
+
+        {/* Menu Sections */}
+        {MENU_SECTIONS.map((section, sectionIndex) => (
+          <Animated.View
+            key={section.title}
+            entering={FadeInDown.delay(400 + sectionIndex * 100).duration(400)}
+            style={styles.menuSection}
+          >
+            <Text style={styles.menuSectionTitle}>{section.title}</Text>
+            <View style={styles.menuCard}>
+              {section.items.map((item, index) => (
+                <MenuItemRow
+                  key={item.id}
+                  item={item}
+                  isLast={index === section.items.length - 1}
+                  onPress={() => item.route && router.push(item.route as any)}
+                />
+              ))}
+            </View>
+          </Animated.View>
+        ))}
+
+        {/* Logout Button */}
+        <Animated.View
+          entering={FadeInDown.delay(700).duration(400)}
+          style={styles.logoutSection}
+        >
+          <Pressable style={styles.logoutButton} onPress={handleLogout}>
+            <Feather name="log-out" size={20} color={tokens.colors.error} />
+            <Text style={styles.logoutText}>Log Out</Text>
+          </Pressable>
+        </Animated.View>
+
+        {/* App Version */}
+        <Animated.Text
+          entering={FadeInDown.delay(800).duration(400)}
+          style={styles.versionText}
+        >
+          Version 1.0.0
+        </Animated.Text>
+      </ScrollView>
+    </View>
+  );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: tokens.colors.background.secondary,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    backgroundColor: tokens.colors.background.primary,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: tokens.colors.text.primary,
+  },
+  settingsButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: tokens.colors.background.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileCard: {
+    alignItems: 'center',
+    backgroundColor: tokens.colors.background.primary,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: tokens.colors.border.light,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 4,
+    borderColor: tokens.colors.primaryLight,
+  },
+  editAvatarButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: tokens.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: tokens.colors.background.primary,
+  },
+  userName: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: tokens.colors.text.primary,
+    marginBottom: 4,
+  },
+  userEmail: {
+    fontSize: 14,
+    color: tokens.colors.text.secondary,
+    marginBottom: 8,
+  },
+  regNoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: tokens.colors.primaryLight,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginBottom: 12,
+  },
+  regNoText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: tokens.colors.primary,
+    fontFamily: 'monospace',
+    letterSpacing: 1,
+  },
+  academicInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  academicBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: tokens.colors.background.tertiary,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  academicText: {
+    fontSize: 12,
+    color: tokens.colors.text.secondary,
+    fontWeight: '500',
+  },
+  memberSinceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 16,
+  },
+  memberSinceText: {
+    fontSize: 13,
+    color: tokens.colors.primary,
+    fontWeight: '500',
+  },
+  editProfileButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: tokens.colors.primary,
+  },
+  editProfileText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: tokens.colors.primary,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    gap: 12,
+    marginBottom: 24,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: tokens.colors.background.primary,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#F5F5F5',
+  },
+  statIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: tokens.colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: tokens.colors.text.primary,
+    marginBottom: 4,
+    letterSpacing: -0.3,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: tokens.colors.text.secondary,
+    fontWeight: '500',
+  },
+  menuSection: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  menuSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: tokens.colors.text.tertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  menuCard: {
+    backgroundColor: tokens.colors.background.primary,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F5F5F5',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  menuItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: tokens.colors.border.light,
+  },
+  menuIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: tokens.colors.background.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  menuContent: {
+    flex: 1,
+  },
+  menuLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: tokens.colors.text.primary,
+  },
+  menuSubtitle: {
+    fontSize: 13,
+    color: tokens.colors.text.tertiary,
+    marginTop: 2,
+  },
+  logoutSection: {
+    paddingHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: tokens.colors.background.primary,
+    paddingVertical: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: tokens.colors.error,
+  },
+  logoutText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: tokens.colors.error,
+  },
+  versionText: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: tokens.colors.text.tertiary,
+    marginBottom: 24,
+  },
+});

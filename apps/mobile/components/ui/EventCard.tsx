@@ -15,10 +15,11 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 import { theme } from '../../lib/constants/theme';
 import { getCategoryById, getCategoryColor } from '../../lib/constants/categories';
@@ -80,11 +81,25 @@ export function EventCard({
   }));
 
   const handlePressIn = () => {
-    scale.value = withSpring(0.98, theme.animation.spring);
+    scale.value = withTiming(0.98, { duration: 100 });
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1, theme.animation.spring);
+    scale.value = withTiming(1, { duration: 150 });
+  };
+
+  const handlePress = () => {
+    if (onPress) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onPress();
+    }
+  };
+
+  const handleFavorite = () => {
+    if (onFavoritePress) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onFavoritePress();
+    }
   };
 
   // Handle both image prop and imageUrl
@@ -107,7 +122,7 @@ export function EventCard({
   if (variant === 'compact') {
     return (
       <AnimatedPressable
-        onPress={onPress}
+        onPress={handlePress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         style={[
@@ -207,7 +222,7 @@ export function EventCard({
         {/* Favorite Button */}
         {onFavoritePress && (
           <Pressable
-            onPress={onFavoritePress}
+            onPress={handleFavorite}
             hitSlop={8}
             style={{
               position: 'absolute',
@@ -231,7 +246,7 @@ export function EventCard({
   if (variant === 'featured') {
     return (
       <AnimatedPressable
-        onPress={onPress}
+        onPress={handlePress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         style={[
@@ -264,7 +279,7 @@ export function EventCard({
         {/* Favorite Button */}
         {onFavoritePress && (
           <Pressable
-            onPress={onFavoritePress}
+            onPress={handleFavorite}
             style={{
               position: 'absolute',
               top: theme.spacing.lg,
@@ -429,7 +444,7 @@ export function EventCard({
   // Default variant - vertical card
   return (
     <AnimatedPressable
-      onPress={onPress}
+      onPress={handlePress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       style={[
@@ -452,7 +467,7 @@ export function EventCard({
         {/* Favorite Button */}
         {onFavoritePress && (
           <Pressable
-            onPress={onFavoritePress}
+            onPress={handleFavorite}
             style={{
               position: 'absolute',
               top: theme.spacing.md,
