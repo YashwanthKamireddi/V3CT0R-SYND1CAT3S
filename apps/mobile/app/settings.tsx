@@ -144,8 +144,6 @@ export default function SettingsScreen() {
   // Toggle states
   const [notifications, setNotifications] = useState(true);
   const [eventReminders, setEventReminders] = useState(true);
-  const [pointsAlerts, setPointsAlerts] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
   const [haptics, setHaptics] = useState(true);
   const [locationServices, setLocationServices] = useState(true);
 
@@ -222,27 +220,11 @@ export default function SettingsScreen() {
           type: 'toggle',
           value: eventReminders,
         },
-        {
-          id: 'points',
-          title: 'Points & Rewards',
-          subtitle: 'Get notified about rewards',
-          icon: 'gift',
-          type: 'toggle',
-          value: pointsAlerts,
-        },
       ],
     },
     {
       title: 'Appearance',
       items: [
-        {
-          id: 'darkMode',
-          title: 'Dark Mode',
-          subtitle: 'Switch to dark theme',
-          icon: 'moon',
-          type: 'toggle',
-          value: darkMode,
-        },
         {
           id: 'haptics',
           title: 'Haptic Feedback',
@@ -348,8 +330,6 @@ export default function SettingsScreen() {
     switch (id) {
       case 'push': return notifications;
       case 'reminders': return eventReminders;
-      case 'points': return pointsAlerts;
-      case 'darkMode': return darkMode;
       case 'haptics': return haptics;
       case 'location': return locationServices;
       default: return false;
@@ -360,8 +340,6 @@ export default function SettingsScreen() {
     switch (id) {
       case 'push': setNotifications(value); break;
       case 'reminders': setEventReminders(value); break;
-      case 'points': setPointsAlerts(value); break;
-      case 'darkMode': setDarkMode(value); break;
       case 'haptics': setHaptics(value); break;
       case 'location': setLocationServices(value); break;
     }

@@ -30,7 +30,7 @@ import { tokens, layout } from '@/lib/styles/unified';
 // Student Profile Data
 const USER = {
   name: 'Yashwanth Kamireddi',
-  email: 'yashwanth.k@srmist.edu.in',
+  email: 'yashwanth.k@gitam.in',
   avatar: 'https://i.pravatar.cc/200?img=12',
   phone: '+91 63026 83827',
   memberSince: 'Aug 2023',
@@ -42,8 +42,8 @@ const USER = {
 // Campus Activity Stats - Meaningful University Metrics
 const STATS = [
   { id: '1', label: 'Events Attended', value: '18', icon: 'calendar' as const },
-  { id: '2', label: 'Campus Points', value: '1,250', icon: 'award' as const },
-  { id: '3', label: 'Campus Rank', value: '#47', icon: 'trending-up' as const },
+  { id: '2', label: 'This Semester', value: '12', icon: 'book-open' as const },
+  { id: '3', label: 'Certificates', value: '8', icon: 'award' as const },
 ];
 
 // Menu Items
@@ -64,7 +64,7 @@ const MENU_SECTIONS: { title: string; items: MenuItem[] }[] = [
     items: [
       { id: '1', icon: 'award', label: 'My Achievements', subtitle: '12 badges earned', route: '/profile/achievements' },
       { id: '2', icon: 'users', label: 'My Clubs', subtitle: '4 clubs joined', route: '/profile/clubs' },
-      { id: '3', icon: 'gift', label: 'Rewards Store', subtitle: '1,250 points available', route: '/profile/rewards' },
+      { id: '3', icon: 'gift', label: 'Rewards Store', subtitle: 'Redeem your rewards', route: '/profile/rewards' },
     ],
   },
   {
@@ -72,7 +72,6 @@ const MENU_SECTIONS: { title: string; items: MenuItem[] }[] = [
     items: [
       { id: '4', icon: 'user', label: 'Edit Profile', subtitle: 'Update your information', route: '/profile/edit' },
       { id: '5', icon: 'bell', label: 'Notifications', hasSwitch: true, switchValue: true },
-      { id: '6', icon: 'moon', label: 'Dark Mode', hasSwitch: true, switchValue: false },
     ],
   },
   {
@@ -292,8 +291,8 @@ export default function ProfileScreen() {
               index={index}
               onPress={() => {
                 if (stat.id === '1') router.push('/tickets');
-                else if (stat.id === '2') router.push('/leaderboard');
-                else if (stat.id === '3') router.push('/leaderboard');
+                else if (stat.id === '2') router.push('/tickets');
+                else if (stat.id === '3') router.push('/profile/achievements');
               }}
             />
           ))}

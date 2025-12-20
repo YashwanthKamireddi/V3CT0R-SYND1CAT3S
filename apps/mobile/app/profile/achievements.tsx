@@ -136,8 +136,8 @@ const ACHIEVEMENTS: Achievement[] = [
 const STATS = {
   totalEarned: 4,
   totalAvailable: 8,
-  points: 850,
-  rank: 12,
+  eventsAttended: 18,
+  certificates: 8,
 };
 
 const rarityColors = {
@@ -191,13 +191,13 @@ export default function AchievementsScreen() {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{STATS.points}</Text>
-              <Text style={styles.statLabel}>Total Points</Text>
+              <Text style={styles.statValue}>{STATS.eventsAttended}</Text>
+              <Text style={styles.statLabel}>Events Attended</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>#{STATS.rank}</Text>
-              <Text style={styles.statLabel}>Campus Rank</Text>
+              <Text style={styles.statValue}>{STATS.certificates}</Text>
+              <Text style={styles.statLabel}>Certificates</Text>
             </View>
           </View>
 

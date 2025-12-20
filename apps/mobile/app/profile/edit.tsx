@@ -28,16 +28,16 @@ import { tokens } from '@/lib/styles/unified';
 
 // Initial user data (in production, fetch from API/state)
 const INITIAL_USER = {
-  name: 'Yash Wankhede',
-  email: 'yash.wankhede@university.edu',
-  phone: '+91 98765 43210',
-  department: 'Computer Science',
-  year: '3rd Year',
-  rollNo: 'CS21B1042',
+  name: 'Yashwanth Kamireddi',
+  email: 'yashwanth.k@gitam.in',
+  phone: '+91 63026 83827',
+  department: 'Computer Science & Engineering',
+  year: '2nd Year',
+  rollNo: '2023002748',
   bio: 'Passionate about tech, hackathons, and building cool stuff!',
   interests: ['Hackathons', 'AI/ML', 'Web Dev', 'Open Source'],
-  linkedin: 'linkedin.com/in/yashwankhede',
-  github: 'github.com/yashwankhede',
+  linkedin: 'linkedin.com/in/yashwanthk',
+  github: 'github.com/yashwanthk',
   avatar: null,
 };
 

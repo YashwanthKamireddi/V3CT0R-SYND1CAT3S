@@ -259,6 +259,7 @@ export default function EventDetailsScreen() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [isRegistered, setIsRegistered] = useState(false);
   const [showAttendees, setShowAttendees] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
 
   // Animation values
   const scrollY = useSharedValue(0);
@@ -267,6 +268,26 @@ export default function EventDetailsScreen() {
   const isNavigatingRef = useRef(false);
 
   const event = EVENTS_DATA[id as string] || DEFAULT_EVENT;
+
+  // Check if event is in the past
+  const isPastEvent = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Extract date from event.date string
+    const dateStr = event.date;
+    // Handle formats like "December 21, 2025" or "December 22-23, 2025"
+    const match = dateStr.match(/(\w+)\s+(\d+)(?:[-,]\s*\d+)?,?\s*(\d{4})/);
+    if (match) {
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      const monthIndex = monthNames.indexOf(match[1]);
+      const day = parseInt(match[2]);
+      const year = parseInt(match[3]);
+      const eventDate = new Date(year, monthIndex, day);
+      return eventDate < today;
+    }
+    return false;
+  };
 
   // Handle like with animation and haptics
   const handleLike = useCallback(async () => {
@@ -415,7 +436,7 @@ export default function EventDetailsScreen() {
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 140 }}
       >
         {/* Hero Image Section */}
         <Animated.View style={[styles.heroContainer, imageAnimatedStyle]}>
@@ -500,8 +521,16 @@ export default function EventDetailsScreen() {
                 {event.organizer.followers} Followers
               </Text>
             </View>
-            <Pressable style={styles.followButton}>
-              <Text style={styles.followButtonText}>Follow</Text>
+            <Pressable
+              style={[styles.followButton, isFollowing && styles.followButtonActive]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setIsFollowing(!isFollowing);
+              }}
+            >
+              <Text style={[styles.followButtonText, isFollowing && styles.followButtonTextActive]}>
+                {isFollowing ? 'Following' : 'Follow'}
+              </Text>
             </Pressable>
           </Animated.View>
 
@@ -557,18 +586,25 @@ export default function EventDetailsScreen() {
       {/* Bottom Registration Bar */}
       <Animated.View
         entering={FadeInUp.delay(500).duration(400)}
-        style={[styles.bottomBar, { paddingBottom: insets.bottom + tokens.spacing[4] }]}
+        style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 24) + 16 }]}
       >
         <View>
-          <Text style={styles.priceLabel}>Earn</Text>
+          <Text style={styles.priceLabel}>{isPastEvent() ? 'Event' : 'Price'}</Text>
           <Text style={styles.price}>
-            {event.points ? `+${event.points} pts` : 'Free'}
+            {isPastEvent() ? 'Ended' : 'Free'}
           </Text>
         </View>
-        <Pressable style={styles.bookButton} onPress={handleRegister}>
-          <Text style={styles.bookButtonText}>Register Now</Text>
-          <Feather name="arrow-right" size={20} color={tokens.colors.white} />
-        </Pressable>
+        {isPastEvent() ? (
+          <View style={[styles.bookButton, styles.bookButtonDisabled]}>
+            <Feather name="lock" size={20} color="#9CA3AF" />
+            <Text style={styles.bookButtonTextDisabled}>Registration Closed</Text>
+          </View>
+        ) : (
+          <Pressable style={styles.bookButton} onPress={handleRegister}>
+            <Text style={styles.bookButtonText}>Register Now</Text>
+            <Feather name="arrow-right" size={20} color={tokens.colors.white} />
+          </Pressable>
+        )}
       </Animated.View>
 
       {/* Attendees Modal */}
@@ -584,8 +620,8 @@ export default function EventDetailsScreen() {
             <View style={styles.modalHandle} />
             <View style={styles.modalTitleRow}>
               <Text style={styles.modalTitle}>All Attendees</Text>
-              <Pressable 
-                style={styles.modalCloseButton} 
+              <Pressable
+                style={styles.modalCloseButton}
                 onPress={() => setShowAttendees(false)}
               >
                 <Feather name="x" size={24} color={tokens.colors.text.primary} />
@@ -656,25 +692,28 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   backButton: {
-    width: tokens.spacing[12],
-    height: tokens.spacing[12],
-    borderRadius: tokens.radius.full,
-    backgroundColor: tokens.colors.surface.scrim,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   topBarRight: {
     flexDirection: 'row',
-    gap: tokens.spacing[3],
+    gap: 12,
   },
   iconButton: {
-    width: tokens.spacing[12],
-    height: tokens.spacing[12],
-    borderRadius: tokens.radius.full,
-    backgroundColor: tokens.colors.surface.scrim,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   iconButtonActive: {
     backgroundColor: '#EF4444',
@@ -821,10 +860,18 @@ const styles = StyleSheet.create({
     borderRadius: tokens.radius.full,
     backgroundColor: tokens.colors.primary,
   },
+  followButtonActive: {
+    backgroundColor: tokens.colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: tokens.colors.border.default,
+  },
   followButtonText: {
     fontSize: tokens.typography.size.sm,
     fontWeight: tokens.typography.weight.semibold,
     color: tokens.colors.white,
+  },
+  followButtonTextActive: {
+    color: tokens.colors.text.secondary,
   },
   aboutSection: {
     marginBottom: tokens.spacing[6],
@@ -903,6 +950,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: tokens.layout.screenPadding,
     paddingTop: tokens.spacing[4],
+    paddingBottom: 24,
     backgroundColor: tokens.colors.background.primary,
     borderTopWidth: 1,
     borderTopColor: tokens.colors.border.light,
@@ -939,10 +987,20 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 6,
   },
+  bookButtonDisabled: {
+    backgroundColor: '#E5E7EB',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
   bookButtonText: {
     fontSize: tokens.typography.size.md,
     fontWeight: tokens.typography.weight.bold,
     color: tokens.colors.white,
+  },
+  bookButtonTextDisabled: {
+    fontSize: tokens.typography.size.md,
+    fontWeight: tokens.typography.weight.semibold,
+    color: '#9CA3AF',
   },
 
   // Attendees Modal Styles

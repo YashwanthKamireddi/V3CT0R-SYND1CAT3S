@@ -1,0 +1,5 @@
+﻿
+> build
+> tsc
+
+src/controllers/attendance.ts(22,31): error TS6133: 'userLocation' is declared but its value is never read.

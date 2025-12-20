@@ -334,9 +334,6 @@ export default function ExploreScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Explore</Text>
-          <Pressable style={styles.mapButton}>
-            <Feather name="map" size={20} color={tokens.colors.text.primary} />
-          </Pressable>
         </View>
 
         {/* Search */}
@@ -393,18 +390,20 @@ export default function ExploreScreen() {
           </View>
         </View>
 
-        {/* Events */}
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.eventsList, { paddingBottom: insets.bottom + 100 }]}>
-          {filteredEvents.length > 0 ? (
-            filteredEvents.map((event, index) => <EventCard key={event.id} event={event} index={index} />)
-          ) : (
-            <View style={styles.emptyState}>
-              <Feather name="search" size={48} color={tokens.colors.text.tertiary} />
-              <Text style={styles.emptyTitle}>No Events Found</Text>
-              <Text style={styles.emptyText}>Try adjusting your search or filters</Text>
-            </View>
-          )}
-        </ScrollView>
+        {/* Events - Using flex: 1 container */}
+        <View style={{ flex: 1 }}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.eventsList, { paddingBottom: insets.bottom + 100 }]}>
+            {filteredEvents.length > 0 ? (
+              filteredEvents.map((event, index) => <EventCard key={event.id} event={event} index={index} />)
+            ) : (
+              <View style={styles.emptyState}>
+                <Feather name="search" size={48} color={tokens.colors.text.tertiary} />
+                <Text style={styles.emptyTitle}>No Events Found</Text>
+                <Text style={styles.emptyText}>Try adjusting your search or filters</Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
       </SafeAreaView>
 
       <FilterModal
@@ -421,33 +420,32 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   safeArea: { flex: 1 },
 
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16 },
+  header: { paddingHorizontal: 20, paddingVertical: 12 },
   headerTitle: { fontSize: 32, fontWeight: '700', color: tokens.colors.text.primary, letterSpacing: -0.5 },
-  mapButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: tokens.colors.background.tertiary, alignItems: 'center', justifyContent: 'center' },
 
-  searchSection: { paddingHorizontal: 20, paddingBottom: 16 },
+  searchSection: { paddingHorizontal: 20, paddingBottom: 12 },
   searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F5', borderRadius: 12, paddingHorizontal: 16, height: 52, gap: 12, borderWidth: 2, borderColor: 'transparent' },
   searchBarFocused: { borderColor: tokens.colors.primary, backgroundColor: '#FFFFFF' },
   searchInput: { flex: 1, fontSize: 16, color: tokens.colors.text.primary },
   searchDivider: { width: 1, height: 24, backgroundColor: '#E0E0E0' },
   filterIconButton: { width: 36, height: 36, borderRadius: 8, backgroundColor: '#FFF4F0', alignItems: 'center', justifyContent: 'center' },
 
-  categoriesScroll: { paddingHorizontal: 20, paddingBottom: 16, gap: 10 },
+  categoriesScroll: { paddingHorizontal: 20, paddingBottom: 8, gap: 10 },
   categoryPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, height: 36, borderRadius: 18, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E0E0E0' },
   categoryPillSelected: { backgroundColor: tokens.colors.primary, borderColor: tokens.colors.primary },
   categoryPillText: { fontSize: 13, fontWeight: '500', color: tokens.colors.text.secondary },
   categoryPillTextSelected: { color: '#FFFFFF' },
 
-  resultsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 12 },
+  resultsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 8 },
   resultsCount: { fontSize: 16, fontWeight: '600', color: tokens.colors.text.primary },
   viewToggle: { flexDirection: 'row', backgroundColor: '#F5F5F5', borderRadius: 8, padding: 4 },
   viewButton: { padding: 8, borderRadius: 6 },
   viewButtonActive: { backgroundColor: '#FFFFFF' },
 
-  eventsList: { paddingHorizontal: 20 },
-  eventCard: { marginBottom: 14 },
-  eventCardInner: { flexDirection: 'row', backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#EFEFEF', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 },
-  eventImage: { width: 110, height: 130, borderTopLeftRadius: 16, borderBottomLeftRadius: 16 },
+  eventsList: { paddingHorizontal: 20, gap: 10 },
+  eventCard: { marginBottom: 2 },
+  eventCardInner: { flexDirection: 'row', backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#F0F0F0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+  eventImage: { width: 100, height: 120, borderTopLeftRadius: 16, borderBottomLeftRadius: 16 },
   eventContent: { flex: 1, padding: 12, justifyContent: 'space-between' },
   eventHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   eventTitle: { flex: 1, fontSize: 15, fontWeight: '600', color: tokens.colors.text.primary, marginRight: 8 },

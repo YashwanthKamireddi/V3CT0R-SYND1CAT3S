@@ -45,12 +45,8 @@ interface FormData {
   department: string;
   year: string;
   rollNumber: string;
-  dietary: string;
-  tshirtSize: string;
 }
 
-const DIETARY_OPTIONS = ['None', 'Vegetarian', 'Vegan', 'Halal', 'Kosher'];
-const TSHIRT_OPTIONS = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
 const YEAR_OPTIONS = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'PG'];
 
 export default function EventRegistrationScreen() {
@@ -63,13 +59,11 @@ export default function EventRegistrationScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     name: 'Yashwanth Kamireddi',
-    email: 'yashwanth.k@srmist.edu.in',
+    email: 'yashwanth.k@gitam.in',
     phone: '+91 63026 83827',
     department: 'Computer Science & Engineering',
     year: '2nd Year',
     rollNumber: '2023002748',
-    dietary: 'Vegetarian',
-    tshirtSize: 'L',
   });
 
   const buttonScale = useSharedValue(1);
@@ -156,12 +150,6 @@ export default function EventRegistrationScreen() {
                 <Text style={styles.eventCardDetailText}>{location || 'Location TBD'}</Text>
               </View>
             </View>
-            {points && Number(points) > 0 && (
-              <View style={styles.pointsBadge}>
-                <Feather name="star" size={14} color="#FFD700" />
-                <Text style={styles.pointsText}>+{points} pts</Text>
-              </View>
-            )}
           </View>
         </LinearGradient>
       </Animated.View>
@@ -265,63 +253,6 @@ export default function EventRegistrationScreen() {
         </View>
       </Animated.View>
 
-      {/* Preferences Section */}
-      <Animated.View entering={FadeInDown.delay(400).duration(400)}>
-        <Text style={styles.sectionTitle}>Preferences (Optional)</Text>
-        <View style={styles.formCard}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Dietary Requirements</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.optionsScroll}>
-              <View style={styles.optionsRow}>
-                {DIETARY_OPTIONS.map((option) => (
-                  <Pressable
-                    key={option}
-                    style={[
-                      styles.optionChip,
-                      formData.dietary === option && styles.optionChipActive,
-                    ]}
-                    onPress={() => updateField('dietary', option)}
-                  >
-                    <Text
-                      style={[
-                        styles.optionChipText,
-                        formData.dietary === option && styles.optionChipTextActive,
-                      ]}
-                    >
-                      {option}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>T-Shirt Size (if applicable)</Text>
-            <View style={styles.optionsRow}>
-              {TSHIRT_OPTIONS.map((option) => (
-                <Pressable
-                  key={option}
-                  style={[
-                    styles.sizeChip,
-                    formData.tshirtSize === option && styles.sizeChipActive,
-                  ]}
-                  onPress={() => updateField('tshirtSize', option)}
-                >
-                  <Text
-                    style={[
-                      styles.sizeChipText,
-                      formData.tshirtSize === option && styles.sizeChipTextActive,
-                    ]}
-                  >
-                    {option}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        </View>
-      </Animated.View>
     </ScrollView>
   );
 
@@ -363,27 +294,6 @@ export default function EventRegistrationScreen() {
           <Text style={styles.confirmValue}>{formData.department}</Text>
           <Text style={styles.confirmSubvalue}>{formData.year} • {formData.rollNumber}</Text>
         </View>
-
-        {(formData.dietary !== 'None' || formData.tshirtSize) && (
-          <>
-            <View style={styles.confirmDivider} />
-            <View style={styles.confirmSection}>
-              <Text style={styles.confirmSectionTitle}>Preferences</Text>
-              {formData.dietary !== 'None' && (
-                <View style={styles.confirmRow}>
-                  <Text style={styles.confirmLabel}>Dietary:</Text>
-                  <Text style={styles.confirmRowValue}>{formData.dietary}</Text>
-                </View>
-              )}
-              {formData.tshirtSize && (
-                <View style={styles.confirmRow}>
-                  <Text style={styles.confirmLabel}>T-Shirt:</Text>
-                  <Text style={styles.confirmRowValue}>{formData.tshirtSize}</Text>
-                </View>
-              )}
-            </View>
-          </>
-        )}
       </Animated.View>
 
       {/* Terms Notice */}
@@ -493,7 +403,7 @@ export default function EventRegistrationScreen() {
         {step !== 'success' && (
           <Animated.View
             entering={FadeInUp.delay(300).duration(400)}
-            style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 }]}
+            style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}
           >
             <Animated.View style={[animatedButtonStyle, { flex: 1 }]}>
               <Pressable
@@ -667,58 +577,6 @@ const styles = StyleSheet.create({
     height: 48,
     fontSize: 15,
     color: tokens.colors.text.primary,
-  },
-  optionsScroll: {
-    marginHorizontal: -4,
-  },
-  optionsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 4,
-  },
-  optionChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: tokens.colors.background.secondary,
-    borderWidth: 1,
-    borderColor: tokens.colors.border.light,
-  },
-  optionChipActive: {
-    backgroundColor: tokens.colors.primaryLight,
-    borderColor: tokens.colors.primary,
-  },
-  optionChipText: {
-    fontSize: 14,
-    color: tokens.colors.text.secondary,
-  },
-  optionChipTextActive: {
-    color: tokens.colors.primary,
-    fontWeight: '600',
-  },
-  sizeChip: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: tokens.colors.background.secondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: tokens.colors.border.light,
-  },
-  sizeChipActive: {
-    backgroundColor: tokens.colors.primaryLight,
-    borderColor: tokens.colors.primary,
-  },
-  sizeChipText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: tokens.colors.text.secondary,
-  },
-  sizeChipTextActive: {
-    color: tokens.colors.primary,
-    fontWeight: '600',
   },
   bottomBar: {
     paddingHorizontal: 20,

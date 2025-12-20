@@ -49,12 +49,6 @@ interface Event {
   isFavorite?: boolean;
 }
 
-interface Category {
-  id: string;
-  name: string;
-  icon: keyof typeof Feather.glyphMap;
-}
-
 interface Reminder {
   id: string;
   eventId: string;
@@ -71,28 +65,14 @@ interface Reminder {
 const USER = {
   name: 'Yashwanth',
   avatar: 'https://i.pravatar.cc/150?img=12',
-  location: 'SRM University',
+  location: 'GITAM University',
   regNo: '2023002748',
 };
 
 // Quick Stats - What Matters for University Students
 const QUICK_STATS = [
   { id: '1', label: 'Events Attended', value: '18', icon: 'calendar' as const, color: '#6366F1' },
-  { id: '2', label: 'Campus Points', value: '1,250', icon: 'award' as const, color: '#F59E0B' },
-  { id: '3', label: 'Campus Rank', value: '#47', icon: 'trending-up' as const, color: '#10B981' },
-  { id: '4', label: 'This Month', value: '4', icon: 'activity' as const, color: '#EC4899' },
-];
-
-// Categories - Campus-focused (clean icons only)
-const CATEGORIES: Category[] = [
-  { id: 'all', name: 'All', icon: 'grid' },
-  { id: 'workshop', name: 'Workshops', icon: 'tool' },
-  { id: 'seminar', name: 'Seminars', icon: 'book-open' },
-  { id: 'cultural', name: 'Cultural', icon: 'music' },
-  { id: 'technical', name: 'Technical', icon: 'cpu' },
-  { id: 'sports', name: 'Sports', icon: 'activity' },
-  { id: 'club', name: 'Clubs', icon: 'users' },
-  { id: 'hackathon', name: 'Hackathons', icon: 'code' },
+  { id: '2', label: 'This Month', value: '4', icon: 'activity' as const, color: '#EC4899' },
 ];
 
 // Featured Campus Events
@@ -208,64 +188,6 @@ const ACTIVE_REMINDERS: Reminder[] = [
     icon: 'code',
   },
 ];
-
-// Category Chip Component
-function CategoryChip({
-  category,
-  selected,
-  onPress,
-}: {
-  category: Category;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  const scale = useSharedValue(1);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const handlePressIn = () => {
-    scale.value = withTiming(0.95, { duration: 100 });
-  };
-
-  const handlePressOut = () => {
-    scale.value = withTiming(1, { duration: 150 });
-  };
-
-  const handlePress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onPress();
-  };
-
-  return (
-    <Animated.View style={animatedStyle}>
-      <Pressable
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        onPress={handlePress}
-        style={[
-          styles.categoryChip,
-          selected && styles.categoryChipSelected,
-        ]}
-      >
-        <Feather
-          name={category.icon}
-          size={16}
-          color={selected ? '#FFFFFF' : tokens.colors.text.secondary}
-        />
-        <Text
-          style={[
-            styles.categoryChipText,
-            selected && styles.categoryChipTextSelected,
-          ]}
-        >
-          {category.name}
-        </Text>
-      </Pressable>
-    </Animated.View>
-  );
-}
 
 // Home Reminder Card Component - Clean Professional Design
 function HomeReminderCard({ reminder, index }: { reminder: Reminder; index: number }) {
@@ -432,9 +354,10 @@ function FeaturedEventCard({ event, index }: { event: Event; index: number }) {
         {/* Favorite Button */}
         <Pressable style={styles.favoriteButton} onPress={handleFavorite}>
           <Feather
-            name={event.isFavorite ? 'heart' : 'heart'}
+            name="heart"
             size={18}
             color={event.isFavorite ? '#F44336' : '#9E9E9E'}
+            style={event.isFavorite ? { opacity: 1 } : { opacity: 0.7 }}
           />
         </Pressable>
 
@@ -560,7 +483,6 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('all');
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -617,17 +539,6 @@ export default function HomeScreen() {
                   </Text>
                 </View>
               </Pressable>
-
-              {/* Notification Button */}
-              <Pressable
-                style={styles.notificationButton}
-                onPress={() => router.push('/notifications')}
-              >
-                <Feather name="bell" size={22} color={tokens.colors.text.primary} />
-                <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>3</Text>
-                </View>
-              </Pressable>
             </View>
 
             {/* Location */}
@@ -657,27 +568,6 @@ export default function HomeScreen() {
             </Pressable>
           </Animated.View>
 
-          {/* Categories */}
-          <Animated.View
-            entering={FadeInDown.delay(200).springify()}
-            style={styles.categoriesSection}
-          >
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.categoriesScroll}
-            >
-              {CATEGORIES.map((category) => (
-                <CategoryChip
-                  key={category.id}
-                  category={category}
-                  selected={selectedCategory === category.id}
-                  onPress={() => setSelectedCategory(category.id)}
-                />
-              ))}
-            </ScrollView>
-          </Animated.View>
-
           {/* Quick Stats Section - What Matters */}
           <Animated.View
             entering={FadeInDown.delay(210).springify()}
@@ -703,8 +593,6 @@ export default function HomeScreen() {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     if (stat.label === 'Events Attended') {
                       router.push('/(tabs)/tickets');
-                    } else if (stat.label === 'Campus Rank') {
-                      router.push('/leaderboard');
                     } else {
                       router.push('/(tabs)/profile');
                     }
@@ -868,31 +756,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: tokens.colors.text.primary,
     letterSpacing: -0.3,
-  },
-  notificationButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: tokens.colors.background.tertiary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: tokens.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  notificationBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#FFFFFF',
   },
   locationRow: {
     flexDirection: 'row',

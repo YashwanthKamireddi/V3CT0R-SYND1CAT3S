@@ -48,7 +48,7 @@ interface Notification {
   time: string;
   timestamp: Date;
   unread: boolean;
-  type: 'reminder' | 'event' | 'points' | 'badge' | 'alert' | 'social';
+  type: 'reminder' | 'event' | 'badge' | 'alert' | 'social';
   eventId?: string;
   actionLabel?: string;
 }
@@ -94,14 +94,14 @@ const NOTIFICATIONS: Notification[] = [
   },
   {
     id: '3',
-    title: 'Points Earned! 🎉',
-    message: '+50 points for attending Music Fest. Keep it up!',
-    icon: 'star',
+    title: 'Certificate Ready! 🎉',
+    message: 'Your certificate for Music Fest is ready to download.',
+    icon: 'award',
     color: '#F59E0B',
     time: '1d ago',
     timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000),
     unread: false,
-    type: 'points',
+    type: 'badge',
   },
   {
     id: '4',
