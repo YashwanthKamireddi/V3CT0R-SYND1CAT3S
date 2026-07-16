@@ -11,6 +11,13 @@ Two apps, one Supabase backend:
 
 The UI follows an Evenro-inspired design system (vibrant orange palette, modern components) — see [`apps/mobile/DESIGN_SYSTEM.md`](apps/mobile/DESIGN_SYSTEM.md).
 
+## The product
+
+| | | | |
+|---|---|---|---|
+| ![Mobile 1](docs/screenshots/mobile-1.jpeg) | ![Mobile 2](docs/screenshots/mobile-2.jpeg) | ![Mobile 3](docs/screenshots/mobile-3.jpeg) | ![Mobile 4](docs/screenshots/mobile-4.jpeg) |
+| ![Mobile 5](docs/screenshots/mobile-5.jpeg) | ![Mobile 6](docs/screenshots/mobile-6.jpeg) | ![Mobile 7](docs/screenshots/mobile-7.jpeg) | ![Mobile 8](docs/screenshots/mobile-8.jpeg) |
+
 ![CampusPulse Admin sign-in](docs/screenshots/admin-login.png)
 
 ## Getting started
