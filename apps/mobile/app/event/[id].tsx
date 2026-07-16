@@ -1,9 +1,10 @@
 /**
  * Event Details Screen - CampusPulse Design System
  * Production-ready with unified typography and responsive layout
+ * Connected to real Supabase backend
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,6 +18,7 @@ import {
   Alert,
   Modal,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,229 +39,72 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { tokens, typography, layout } from '@/lib/styles/unified';
+import { useEvent, useRegistration } from '@/lib/hooks';
+import { useAuth } from '@/lib/context/AuthContext';
+import { Avatar } from '@/components/ui/Avatar';
+import { supabase } from '@/lib/supabase/client';
 
 const HEADER_HEIGHT = 320;
 
-// Campus Event Data
-const EVENTS_DATA: Record<string, any> = {
-  '1': {
-    id: '1',
-    title: 'AI/ML Workshop Series',
-    description: 'Dive deep into Artificial Intelligence and Machine Learning with hands-on projects. Learn from industry experts and build real-world applications using Python, TensorFlow, and PyTorch.\n\nTopics covered: Neural Networks, NLP, Computer Vision, and Model Deployment. Certificates will be provided upon completion.',
-    date: 'Saturday, December 21, 2025',
-    time: '10:00 AM - 5:00 PM',
-    location: 'Computer Lab 301',
-    address: 'Engineering Building, Block C, 3rd Floor',
-    image: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=1200&q=80',
-    price: 'Free',
-    category: 'Workshop',
-    attendees: 89,
-    maxCapacity: 120,
-    organizer: {
-      name: 'Tech Club',
-      avatar: 'https://i.pravatar.cc/100?img=50',
-      followers: '2.3K',
-      verified: true,
-    },
-    points: 50,
-  },
-  '2': {
-    id: '2',
-    title: 'CodeVerse Hackathon 2025',
-    description: 'The flagship 24-hour hackathon is back! Build innovative solutions, compete with the best coders, and win exciting prizes. Open to all departments.\n\nPrize Pool: ₹1,00,000. Mentorship from industry professionals. Free food and swag for all participants.',
-    date: 'December 22-23, 2025',
-    time: '9:00 AM onwards',
-    location: 'Main Auditorium',
-    address: 'Central Campus, Ground Floor',
-    image: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=1200&q=80',
-    price: 'Free',
-    category: 'Hackathon',
-    attendees: 234,
-    maxCapacity: 300,
-    organizer: {
-      name: 'Computer Science Dept.',
-      avatar: 'https://i.pravatar.cc/100?img=51',
-      followers: '5.1K',
-      verified: true,
-    },
-    points: 100,
-  },
-  '3': {
-    id: '3',
-    title: 'Annual Cultural Fest - Rhythm',
-    description: 'The most awaited event of the year! Three days of music, dance, drama, and art. Featuring performances from professional artists and student talent.\n\nEvents: Battle of Bands, Dance Competition, Fashion Show, Stand-up Comedy, and more.',
-    date: 'December 26-28, 2025',
-    time: '5:00 PM - 10:00 PM',
-    location: 'Open Air Theatre',
-    address: 'Main Campus Grounds',
-    image: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1200&q=80',
-    price: 'Free',
-    category: 'Cultural',
-    attendees: 1200,
-    maxCapacity: 2000,
-    organizer: {
-      name: 'Cultural Committee',
-      avatar: 'https://i.pravatar.cc/100?img=52',
-      followers: '8.7K',
-      verified: true,
-    },
-    points: 30,
-  },
-  '4': {
-    id: '4',
-    title: 'Guest Lecture: Future of FinTech',
-    description: 'Join us for an insightful session with Mr. Rajesh Sharma, CEO of PaySecure Technologies, as he discusses the evolving landscape of financial technology.\n\nTopics: Digital Payments, Blockchain in Banking, Regulatory Challenges, Career Opportunities in FinTech.',
-    date: 'Monday, December 23, 2025',
-    time: '2:00 PM - 4:00 PM',
-    location: 'Seminar Hall A',
-    address: 'Management Building, 2nd Floor',
-    image: 'https://images.unsplash.com/photo-1560439514-4e9645039924?w=1200&q=80',
-    price: 'Free',
-    category: 'Seminar',
-    attendees: 156,
-    maxCapacity: 200,
-    organizer: {
-      name: 'Finance Club',
-      avatar: 'https://i.pravatar.cc/100?img=53',
-      followers: '1.8K',
-      verified: true,
-    },
-    points: 25,
-  },
-  '5': {
-    id: '5',
-    title: 'Inter-College Basketball Tournament',
-    description: 'Witness the best college basketball teams compete for the championship trophy! Cheer for our home team as they take on rivals from across the city.\n\n12 teams. 3 days. 1 champion. Refreshments available at the venue.',
-    date: 'December 27, 2025',
-    time: '9:00 AM - 6:00 PM',
-    location: 'Sports Complex',
-    address: 'Indoor Stadium, North Campus',
-    image: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=1200&q=80',
-    price: 'Free',
-    category: 'Sports',
-    attendees: 320,
-    maxCapacity: 500,
-    organizer: {
-      name: 'Sports Council',
-      avatar: 'https://i.pravatar.cc/100?img=54',
-      followers: '3.2K',
-      verified: true,
-    },
-    points: 20,
-  },
-  '6': {
-    id: '6',
-    title: 'Photography Club Exhibition',
-    description: 'Explore stunning visual stories captured by our talented photography club members. The exhibition showcases the best works from this semester.\n\nCategories: Nature, Street, Portrait, Abstract, and Campus Life.',
-    date: 'December 28, 2025',
-    time: '11:00 AM - 6:00 PM',
-    location: 'Art Gallery',
-    address: 'Fine Arts Building, Ground Floor',
-    image: 'https://images.unsplash.com/photo-1554048612-b6a482bc67e5?w=1200&q=80',
-    price: 'Free',
-    category: 'Club Event',
-    attendees: 78,
-    maxCapacity: 150,
-    organizer: {
-      name: 'Photography Club',
-      avatar: 'https://i.pravatar.cc/100?img=55',
-      followers: '1.2K',
-      verified: true,
-    },
-    points: 15,
-  },
-  '7': {
-    id: '7',
-    title: 'Cloud Computing Bootcamp',
-    description: 'Get certified in cloud technologies! This intensive bootcamp covers AWS, Azure, and Google Cloud Platform fundamentals.\n\nHands-on labs, real-world projects, and exam preparation included. Limited seats available.',
-    date: 'January 2, 2026',
-    time: '10:00 AM - 4:00 PM',
-    location: 'IT Lab 201',
-    address: 'Technology Block, 2nd Floor',
-    image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200&q=80',
-    price: 'Free',
-    category: 'Technical',
-    attendees: 67,
-    maxCapacity: 80,
-    organizer: {
-      name: 'Cloud Computing Club',
-      avatar: 'https://i.pravatar.cc/100?img=56',
-      followers: '950',
-      verified: true,
-    },
-    points: 40,
-  },
-  '8': {
-    id: '8',
-    title: 'Entrepreneurship Summit',
-    description: 'Connect with successful entrepreneurs, investors, and mentors. Learn how to turn your ideas into successful startups.\n\nPitch competition with ₹50,000 seed funding for the winning idea. Networking lunch included.',
-    date: 'January 5, 2026',
-    time: '9:30 AM - 5:00 PM',
-    location: 'Conference Hall',
-    address: 'Admin Building, 1st Floor',
-    image: 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=1200&q=80',
-    price: 'Free',
-    category: 'Seminar',
-    attendees: 245,
-    maxCapacity: 300,
-    organizer: {
-      name: 'E-Cell',
-      avatar: 'https://i.pravatar.cc/100?img=57',
-      followers: '4.5K',
-      verified: true,
-    },
-    points: 35,
-  },
-};
+// (removed: EVENTS_DATA + SAMPLE_ATTENDEES mock data — now using Supabase)
 
-const DEFAULT_EVENT = {
-  id: '0',
-  title: 'Event Details',
-  description: 'Event information will be displayed here when available.',
-  date: 'Coming Soon',
-  time: 'Time TBD',
-  location: 'Location TBD',
-  address: 'Address will be updated',
-  image: 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=1200&q=80',
-  price: 'TBD',
-  category: 'General',
-  attendees: 0,
-  maxCapacity: 100,
-  organizer: {
-    name: 'Event Organizer',
-    avatar: 'https://i.pravatar.cc/100?img=55',
-    followers: '1K',
-    verified: false,
-  },
-};
 
-// Sample Attendees Data for All Events
-const SAMPLE_ATTENDEES = [
-  { id: '1', name: 'Yashwanth Kamireddi', regNo: '2023002748', department: 'CSE', avatar: 'https://i.pravatar.cc/100?img=12', isYou: true },
-  { id: '2', name: 'Priya Sharma', regNo: '2023003245', department: 'ECE', avatar: 'https://i.pravatar.cc/100?img=21' },
-  { id: '3', name: 'Rahul Verma', regNo: '2023001567', department: 'ME', avatar: 'https://i.pravatar.cc/100?img=22' },
-  { id: '4', name: 'Ananya Singh', regNo: '2023004521', department: 'CSE', avatar: 'https://i.pravatar.cc/100?img=23' },
-  { id: '5', name: 'Karthik Reddy', regNo: '2023002156', department: 'IT', avatar: 'https://i.pravatar.cc/100?img=24' },
-  { id: '6', name: 'Sneha Patil', regNo: '2023003897', department: 'CSE', avatar: 'https://i.pravatar.cc/100?img=25' },
-  { id: '7', name: 'Arjun Mehta', regNo: '2023001234', department: 'ECE', avatar: 'https://i.pravatar.cc/100?img=26' },
-  { id: '8', name: 'Divya Krishna', regNo: '2023005678', department: 'BT', avatar: 'https://i.pravatar.cc/100?img=27' },
-  { id: '9', name: 'Vikram Patel', regNo: '2023002345', department: 'CSE', avatar: 'https://i.pravatar.cc/100?img=28' },
-  { id: '10', name: 'Meera Nair', regNo: '2023004321', department: 'IT', avatar: 'https://i.pravatar.cc/100?img=29' },
-  { id: '11', name: 'Sanjay Kumar', regNo: '2023001876', department: 'ME', avatar: 'https://i.pravatar.cc/100?img=30' },
-  { id: '12', name: 'Aisha Khan', regNo: '2023003456', department: 'CSE', avatar: 'https://i.pravatar.cc/100?img=31' },
-  { id: '13', name: 'Rohan Gupta', regNo: '2023002987', department: 'ECE', avatar: 'https://i.pravatar.cc/100?img=32' },
-  { id: '14', name: 'Lakshmi Iyer', regNo: '2023004567', department: 'CSE', avatar: 'https://i.pravatar.cc/100?img=33' },
-  { id: '15', name: 'Akash Joshi', regNo: '2023001543', department: 'IT', avatar: 'https://i.pravatar.cc/100?img=34' },
-];
+// Fallback mock data for when event is not found in database
+const MOCK_EVENTS_DATA: Record<string, any> = {};
 
 export default function EventDetailsScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [isFavorite, setIsFavorite] = useState(false);
-  const [isRegistered, setIsRegistered] = useState(false);
   const [showAttendees, setShowAttendees] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [attendees, setAttendees] = useState<Array<{
+    id: string;
+    name: string;
+    avatar: string | null;
+    department: string;
+    isYou: boolean;
+  }>>([]);
+
+  // Real data from Supabase
+  const { user, isAuthenticated } = useAuth();
+  const { event: supabaseEvent, isLoading, error } = useEvent(id as string);
+  const {
+    isRegistered,
+    isRegistering,
+    register,
+    cancel: cancelRegistration,
+    isCancelling,
+    refresh: checkRegistration
+  } = useRegistration(id as string);
+
+  // Fetch attendees for this event from Supabase
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('registrations')
+        .select('user_id, profiles:user_id (id, full_name, avatar_url, branch)')
+        .eq('event_id', id as string)
+        .eq('status', 'confirmed')
+        .limit(50);
+      if (cancelled) return;
+      const list = (data ?? [])
+        .map((r: any) => r.profiles)
+        .filter(Boolean)
+        .map((p: any) => ({
+          id: p.id,
+          name: p.full_name ?? 'Anonymous',
+          avatar: p.avatar_url,
+          department: p.branch ?? '',
+          isYou: p.id === user?.id,
+        }));
+      setAttendees(list);
+    })();
+    return () => { cancelled = true; };
+  }, [id, user?.id]);
 
   // Animation values
   const scrollY = useSharedValue(0);
@@ -267,16 +112,73 @@ export default function EventDetailsScreen() {
   const shareScale = useSharedValue(1);
   const isNavigatingRef = useRef(false);
 
-  const event = EVENTS_DATA[id as string] || DEFAULT_EVENT;
+  // Format event data for display (convert from Supabase format)
+  const event = useMemo(() => {
+    if (supabaseEvent) {
+      const eventDate = new Date(supabaseEvent.start_time ?? supabaseEvent.date);
+      const endDate = supabaseEvent.end_time ? new Date(supabaseEvent.end_time) : null;
+
+      return {
+        id: supabaseEvent.id,
+        title: supabaseEvent.title,
+        description: supabaseEvent.description || '',
+        date: endDate && eventDate.toDateString() !== endDate.toDateString()
+          ? `${eventDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}-${endDate.toLocaleDateString('en-US', { day: 'numeric', year: 'numeric' })}`
+          : eventDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
+        time: eventDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+        location: supabaseEvent.venue || 'TBD',
+        address: supabaseEvent.venue_address || supabaseEvent.venue || '',
+        image: supabaseEvent.image_url || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=1200&q=80',
+        price: 'Free', // Events are free in our schema
+        category: supabaseEvent.category || 'Event',
+        attendees: supabaseEvent.current_registrations || 0,
+        maxCapacity: supabaseEvent.capacity || 100,
+        organizer: {
+          name: supabaseEvent.clubs?.name || 'Campus Club',
+          avatar: supabaseEvent.clubs?.logo_url || 'https://i.pravatar.cc/100?img=55',
+          followers: supabaseEvent.clubs?.member_count ? `${(supabaseEvent.clubs.member_count / 1000).toFixed(1)}K` : '1K',
+          verified: true,
+        },
+        points: supabaseEvent.points_reward || 0,
+        rawDate: eventDate,
+      };
+    }
+
+    // No mock fallback — event must come from Supabase. Render placeholder if not yet loaded.
+    return {
+      id: '0',
+      title: 'Event Details',
+      description: 'Event information will be displayed here when available.',
+      date: 'Coming Soon',
+      time: 'Time TBD',
+      location: 'Location TBD',
+      address: 'Address will be updated',
+      image: 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=1200&q=80',
+      price: 'TBD',
+      category: 'General',
+      attendees: 0,
+      maxCapacity: 100,
+      organizer: {
+        name: 'Event Organizer',
+        avatar: 'https://i.pravatar.cc/100?img=55',
+        followers: '1K',
+        verified: false,
+      },
+      points: 0,
+    };
+  }, [supabaseEvent, id]);
 
   // Check if event is in the past
-  const isPastEvent = () => {
+  const isPastEvent = useCallback(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Extract date from event.date string
+    if (event.rawDate) {
+      return event.rawDate < today;
+    }
+
+    // Fallback: Extract date from event.date string
     const dateStr = event.date;
-    // Handle formats like "December 21, 2025" or "December 22-23, 2025"
     const match = dateStr.match(/(\w+)\s+(\d+)(?:[-,]\s*\d+)?,?\s*(\d{4})/);
     if (match) {
       const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -287,7 +189,7 @@ export default function EventDetailsScreen() {
       return eventDate < today;
     }
     return false;
-  };
+  }, [event]);
 
   // Handle like with animation and haptics
   const handleLike = useCallback(async () => {
@@ -328,18 +230,79 @@ export default function EventDetailsScreen() {
     }
   }, [event, id]);
 
-  // Navigate to registration
-  const handleRegister = useCallback(() => {
+  // Handle registration
+  const handleRegister = useCallback(async () => {
     if (isNavigatingRef.current) return;
+
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      Alert.alert(
+        'Sign In Required',
+        'Please sign in to register for this event.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Sign In', onPress: () => router.push('/auth/login') }
+        ]
+      );
+      return;
+    }
+
     isNavigatingRef.current = true;
-
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    router.push(`/event/register?id=${id}&title=${encodeURIComponent(event.title)}&date=${encodeURIComponent(event.date)}&location=${encodeURIComponent(event.location)}&points=${event.points || 0}`);
 
-    setTimeout(() => {
-      isNavigatingRef.current = false;
-    }, 1000);
-  }, [id, event, router]);
+    try {
+      const result = await register();
+
+      if (result.success) {
+        Alert.alert(
+          '🎉 Registration Successful!',
+          `You're registered for ${event.title}. You'll earn ${event.points} points for attending!`,
+          [{ text: 'View Ticket', onPress: () => router.push('/(tabs)/tickets') }]
+        );
+      } else {
+        Alert.alert(
+          'Registration Failed',
+          result.error || 'Unable to register for this event. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        'Error',
+        'Something went wrong. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setTimeout(() => {
+        isNavigatingRef.current = false;
+      }, 500);
+    }
+  }, [isAuthenticated, register, event, router]);
+
+  // Handle cancellation
+  const handleCancelRegistration = useCallback(async () => {
+    Alert.alert(
+      'Cancel Registration',
+      'Are you sure you want to cancel your registration for this event?',
+      [
+        { text: 'Keep Registration', style: 'cancel' },
+        {
+          text: 'Cancel Registration',
+          style: 'destructive',
+          onPress: async () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+            const result = await cancelRegistration();
+
+            if (result.success) {
+              Alert.alert('Registration Cancelled', 'Your registration has been cancelled.');
+            } else {
+              Alert.alert('Error', result.error || 'Failed to cancel registration.');
+            }
+          }
+        }
+      ]
+    );
+  }, [cancelRegistration]);
 
   // Animated styles
   const likeAnimatedStyle = useAnimatedStyle(() => ({
@@ -357,11 +320,13 @@ export default function EventDetailsScreen() {
   });
 
   const headerAnimatedStyle = useAnimatedStyle(() => ({
+    // Only solidify the colored header once the hero has scrolled out, so it
+    // doesn't paint over date/time content that lives just below the hero.
     opacity: interpolate(
       scrollY.value,
-      [0, HEADER_HEIGHT - 100],
+      [HEADER_HEIGHT - 80, HEADER_HEIGHT],
       [0, 1],
-      Extrapolate.CLAMP
+      Extrapolate.CLAMP,
     ),
   }));
 
@@ -387,6 +352,25 @@ export default function EventDetailsScreen() {
   }));
 
   const capacityPercent = (event.attendees / event.maxCapacity) * 100;
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <StatusBar barStyle="light-content" />
+        <View style={[styles.topBar, { top: insets.top + 8 }]}>
+          <Pressable style={styles.backButton} onPress={() => router.back()}>
+            <Feather name="arrow-left" size={22} color="#FFFFFF" />
+          </Pressable>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={tokens.colors.primary} />
+          <Text style={styles.loadingText}>Loading event...</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -589,20 +573,57 @@ export default function EventDetailsScreen() {
         style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 24) + 16 }]}
       >
         <View>
-          <Text style={styles.priceLabel}>{isPastEvent() ? 'Event' : 'Price'}</Text>
-          <Text style={styles.price}>
-            {isPastEvent() ? 'Ended' : 'Free'}
-          </Text>
+          <Text style={styles.priceLabel}>{isPastEvent() ? 'Event' : isRegistered ? 'Status' : 'Earn'}</Text>
+          <View style={styles.priceRow}>
+            {isPastEvent() ? (
+              <Text style={styles.price}>Ended</Text>
+            ) : isRegistered ? (
+              <>
+                <Feather name="check-circle" size={18} color="#10B981" style={{ marginRight: 4 }} />
+                <Text style={[styles.price, { color: '#10B981' }]}>Registered</Text>
+              </>
+            ) : (
+              <>
+                <Feather name="award" size={18} color="#F59E0B" style={{ marginRight: 4 }} />
+                <Text style={[styles.price, { color: '#F59E0B' }]}>+{event.points} pts</Text>
+              </>
+            )}
+          </View>
         </View>
         {isPastEvent() ? (
           <View style={[styles.bookButton, styles.bookButtonDisabled]}>
             <Feather name="lock" size={20} color="#9CA3AF" />
             <Text style={styles.bookButtonTextDisabled}>Registration Closed</Text>
           </View>
+        ) : isRegistered ? (
+          <Pressable
+            style={[styles.bookButton, styles.bookButtonCancel]}
+            onPress={handleCancelRegistration}
+            disabled={isCancelling}
+          >
+            {isCancelling ? (
+              <ActivityIndicator size="small" color="#EF4444" />
+            ) : (
+              <>
+                <Feather name="x-circle" size={20} color="#EF4444" />
+                <Text style={[styles.bookButtonText, { color: '#EF4444' }]}>Cancel</Text>
+              </>
+            )}
+          </Pressable>
         ) : (
-          <Pressable style={styles.bookButton} onPress={handleRegister}>
-            <Text style={styles.bookButtonText}>Register Now</Text>
-            <Feather name="arrow-right" size={20} color={tokens.colors.white} />
+          <Pressable
+            style={styles.bookButton}
+            onPress={handleRegister}
+            disabled={isRegistering}
+          >
+            {isRegistering ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Text style={styles.bookButtonText}>Register Now</Text>
+                <Feather name="arrow-right" size={20} color={tokens.colors.white} />
+              </>
+            )}
           </Pressable>
         )}
       </Animated.View>
@@ -632,12 +653,17 @@ export default function EventDetailsScreen() {
 
           {/* Attendees List */}
           <FlatList
-            data={SAMPLE_ATTENDEES}
+            data={attendees}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.attendeesModalList}
+            ListEmptyComponent={
+              <Text style={{ textAlign: 'center', padding: 24, color: tokens.colors.text.tertiary }}>
+                No registrations yet — be the first!
+              </Text>
+            }
             renderItem={({ item }) => (
               <View style={[styles.attendeeItem, item.isYou && styles.attendeeItemYou]}>
-                <Image source={{ uri: item.avatar }} style={styles.attendeeModalAvatar} />
+                <Avatar source={item.avatar || undefined} name={item.name} size="md" />
                 <View style={styles.attendeeInfo}>
                   <View style={styles.attendeeNameRow}>
                     <Text style={styles.attendeeName}>{item.name}</Text>
@@ -647,7 +673,7 @@ export default function EventDetailsScreen() {
                       </View>
                     )}
                   </View>
-                  <Text style={styles.attendeeDept}>{item.regNo} • {item.department}</Text>
+                  <Text style={styles.attendeeDept}>{item.department || '—'}</Text>
                 </View>
               </View>
             )}
@@ -968,6 +994,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: tokens.spacing[1],
   },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   price: {
     fontSize: tokens.typography.size['2xl'],
     fontWeight: tokens.typography.weight.bold,
@@ -1105,5 +1135,22 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: tokens.colors.border.light,
     marginLeft: 78,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+    backgroundColor: tokens.colors.background.secondary,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: tokens.colors.text.secondary,
+    fontWeight: '500',
+  },
+  bookButtonCancel: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 2,
+    borderColor: '#EF4444',
   },
 });

@@ -1,6 +1,7 @@
 /**
  * Home Screen - CampusPulse Design System
  * Production-ready home screen with unified typography and layout
+ * Connected to real Supabase backend
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -13,6 +14,7 @@ import {
   Image,
   StyleSheet,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -31,8 +33,14 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { tokens, typography, layout } from '@/lib/styles/unified';
+import { useAuth } from '@/lib/context/AuthContext';
+import { Avatar } from '@/components/ui/Avatar';
+import { useFeaturedEvents, useEvents } from '@/lib/hooks/useEvents';
+import { useUserStats, useUserRank } from '@/lib/hooks/useProfile';
+import { useReminders } from '@/lib/hooks/useReminders';
+import { EventWithClub } from '@/lib/supabase/database.types';
 
-const CARD_WIDTH = layout.screenWidth - tokens.spacing[10];
+const CARD_WIDTH = 300;
 const REMINDER_CARD_WIDTH = layout.screenWidth * 0.75;
 
 // Types
@@ -47,6 +55,7 @@ interface Event {
   category: string;
   attendees: number;
   isFavorite?: boolean;
+  points?: number;
 }
 
 interface Reminder {
@@ -61,133 +70,39 @@ interface Reminder {
   icon: keyof typeof Feather.glyphMap;
 }
 
-// User Data - Yashwanth Kamireddi
-const USER = {
-  name: 'Yashwanth',
-  avatar: 'https://i.pravatar.cc/150?img=12',
+// Default fallback data when not authenticated
+const DEFAULT_USER = {
+  name: 'Guest',
+  avatar: '',
   location: 'GITAM University',
-  regNo: '2023002748',
+  regNo: '',
 };
 
-// Quick Stats - What Matters for University Students
-const QUICK_STATS = [
-  { id: '1', label: 'Events Attended', value: '18', icon: 'calendar' as const, color: '#6366F1' },
-  { id: '2', label: 'This Month', value: '4', icon: 'activity' as const, color: '#EC4899' },
-];
-
-// Featured Campus Events
-const FEATURED_EVENTS: Event[] = [
-  {
-    id: '1',
-    title: 'CodeVerse Hackathon 2025',
-    date: 'Dec 22-23',
-    time: '9:00 AM',
-    location: 'Main Auditorium',
-    image: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&q=80',
-    price: 'Free',
-    category: 'hackathon',
-    attendees: 234,
-    isFavorite: true,
-  },
-  {
-    id: '2',
-    title: 'Annual Cultural Fest - Rhythm',
-    date: 'Dec 26-28',
-    time: '5:00 PM',
-    location: 'Open Air Theatre',
-    image: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&q=80',
-    price: 'Free',
-    category: 'cultural',
-    attendees: 1200,
+// Format event from database to display format
+const formatEventForDisplay = (event: EventWithClub): Event => {
+  const eventDate = event.start_time ? new Date(event.start_time) : null;
+  return {
+    id: event.id,
+    title: event.title,
+    date: eventDate ? eventDate.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    }) : 'TBD',
+    time: eventDate ? eventDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }) : 'TBD',
+    location: event.venue || 'TBD',
+    image: event.image_url || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800&q=80',
+    price: 'Free', // Events are free in our schema
+    category: event.category || 'event',
+    attendees: event.current_registrations || 0,
     isFavorite: false,
-  },
-  {
-    id: '3',
-    title: 'AI/ML Workshop Series',
-    date: 'Sat, Dec 21',
-    time: '10:00 AM',
-    location: 'Computer Lab 301',
-    image: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800&q=80',
-    price: 'Free',
-    category: 'workshop',
-    attendees: 89,
-    isFavorite: false,
-  },
-];
-
-// Upcoming Campus Events
-const UPCOMING_EVENTS: Event[] = [
-  {
-    id: '4',
-    title: 'Guest Lecture: Future of FinTech',
-    date: 'Mon, Dec 23',
-    time: '2:00 PM',
-    location: 'Seminar Hall A',
-    image: 'https://images.unsplash.com/photo-1560439514-4e9645039924?w=800&q=80',
-    price: 'Free',
-    category: 'seminar',
-    attendees: 156,
-  },
-  {
-    id: '5',
-    title: 'Inter-College Basketball Tournament',
-    date: 'Dec 27',
-    time: '9:00 AM',
-    location: 'Sports Complex',
-    image: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&q=80',
-    price: 'Free',
-    category: 'sports',
-    attendees: 320,
-  },
-  {
-    id: '6',
-    title: 'Photography Club Exhibition',
-    date: 'Dec 28',
-    time: '11:00 AM',
-    location: 'Art Gallery',
-    image: 'https://images.unsplash.com/photo-1554048612-b6a482bc67e5?w=800&q=80',
-    price: 'Free',
-    category: 'club',
-    attendees: 78,
-  },
-  {
-    id: '7',
-    title: 'Entrepreneurship Summit',
-    date: 'Jan 05',
-    time: '9:30 AM',
-    location: 'Conference Hall',
-    image: 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=800&q=80',
-    price: 'Free',
-    category: 'seminar',
-    attendees: 245,
-  },
-];
-
-// Active Reminders - events user has set reminders for
-const ACTIVE_REMINDERS: Reminder[] = [
-  {
-    id: 'r1',
-    eventId: '3',
-    eventTitle: 'AI/ML Workshop Series',
-    eventDate: 'Tomorrow',
-    eventTime: '10:00 AM',
-    location: 'Computer Lab 301',
-    timeUntil: 'in 18 hours',
-    color: '#FF6B35',
-    icon: 'cpu',
-  },
-  {
-    id: 'r2',
-    eventId: '1',
-    eventTitle: 'CodeVerse Hackathon 2025',
-    eventDate: 'Dec 22',
-    eventTime: '9:00 AM',
-    location: 'Main Auditorium',
-    timeUntil: 'in 2 days',
-    color: '#7C3AED',
-    icon: 'code',
-  },
-];
+    points: event.points_reward || 0,
+  };
+};
 
 // Home Reminder Card Component - Clean Professional Design
 function HomeReminderCard({ reminder, index }: { reminder: Reminder; index: number }) {
@@ -351,6 +266,14 @@ function FeaturedEventCard({ event, index }: { event: Event; index: number }) {
           </Text>
         </View>
 
+        {/* Points Badge */}
+        {event.points && (
+          <View style={styles.pointsBadge}>
+            <Feather name="award" size={12} color="#F59E0B" />
+            <Text style={styles.pointsBadgeText}>+{event.points} pts</Text>
+          </View>
+        )}
+
         {/* Favorite Button */}
         <Pressable style={styles.favoriteButton} onPress={handleFavorite}>
           <Feather
@@ -385,18 +308,12 @@ function FeaturedEventCard({ event, index }: { event: Event; index: number }) {
 
           {/* Attendees */}
           <View style={styles.attendeesRow}>
-            <View style={styles.avatarStack}>
-              {[1, 2, 3].map((i) => (
-                <Image
-                  key={i}
-                  source={{ uri: `https://i.pravatar.cc/100?img=${i + 10}` }}
-                  style={[styles.stackedAvatar, { marginLeft: i > 1 ? -8 : 0 }]}
-                />
-              ))}
+            <View style={styles.attendeesPill}>
+              <Feather name="users" size={12} color={tokens.colors.primary} />
+              <Text style={styles.attendeesText}>
+                {event.attendees} going
+              </Text>
             </View>
-            <Text style={styles.attendeesText}>
-              +{event.attendees} going
-            </Text>
           </View>
         </View>
       </Pressable>
@@ -471,6 +388,12 @@ function UpcomingEventCard({ event, index }: { event: Event; index: number }) {
           <Text style={styles.upcomingPriceText}>
             {typeof event.price === 'number' ? `$${event.price}` : event.price}
           </Text>
+          {event.points && (
+            <View style={styles.upcomingPointsBadge}>
+              <Feather name="award" size={10} color="#F59E0B" />
+              <Text style={styles.upcomingPointsText}>+{event.points}</Text>
+            </View>
+          )}
         </View>
       </Pressable>
       </Animated.View>
@@ -484,10 +407,79 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
 
-  const onRefresh = useCallback(() => {
+  // Real data hooks
+  const { user, profile, isAuthenticated } = useAuth();
+  const { events: featuredEvents, isLoading: loadingFeatured, refresh: refreshFeatured } = useFeaturedEvents(5);
+  const { events: upcomingEvents, isLoading: loadingUpcoming, refresh: refreshUpcoming } = useEvents();
+  const { stats, isLoading: loadingStats, refresh: refreshStats } = useUserStats();
+  const { rank, isLoading: loadingRank, refresh: refreshRank } = useUserRank();
+  const { reminders, isLoading: loadingReminders, refresh: refreshReminders } = useReminders();
+
+  // Prepare user data
+  const userData = {
+    name: profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || DEFAULT_USER.name,
+    fullName: profile?.full_name || user?.email?.split('@')[0] || DEFAULT_USER.name,
+    avatar: profile?.avatar_url || '',
+    location: 'GITAM University',
+    regNo: profile?.student_id || DEFAULT_USER.regNo,
+  };
+
+  // Prepare quick stats with real data
+  const quickStats = [
+    {
+      id: '1',
+      label: 'Campus Points',
+      value: stats?.totalPoints?.toString() || '0',
+      icon: 'award' as const,
+      color: '#F59E0B',
+      route: '/profile/rewards'
+    },
+    {
+      id: '2',
+      label: 'Events Attended',
+      value: stats?.totalEvents?.toString() || '0',
+      icon: 'calendar' as const,
+      color: '#6366F1',
+      route: '/(tabs)/tickets'
+    },
+    {
+      id: '3',
+      label: 'Campus Rank',
+      value: rank ? `#${rank}` : '-',
+      icon: 'trending-up' as const,
+      color: '#10B981',
+      route: '/leaderboard'
+    },
+  ];
+
+  // Format events for display
+  const displayFeaturedEvents: Event[] = featuredEvents.map(formatEventForDisplay);
+  const displayUpcomingEvents: Event[] = upcomingEvents.slice(0, 6).map(formatEventForDisplay);
+
+  // Format reminders for display
+  const displayReminders: Reminder[] = reminders.map(r => ({
+    id: r.id,
+    eventId: r.eventId,
+    eventTitle: r.eventTitle,
+    eventDate: r.eventDate,
+    eventTime: r.eventTime,
+    location: r.location,
+    timeUntil: r.timeUntil,
+    color: r.color,
+    icon: r.icon as keyof typeof Feather.glyphMap,
+  }));
+
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1500);
-  }, []);
+    await Promise.all([
+      refreshFeatured(),
+      refreshUpcoming(),
+      refreshStats(),
+      refreshRank(),
+      refreshReminders(),
+    ]);
+    setRefreshing(false);
+  }, [refreshFeatured, refreshUpcoming, refreshStats, refreshRank, refreshReminders]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -496,12 +488,14 @@ export default function HomeScreen() {
     return 'Good Evening';
   };
 
+  const isLoading = loadingFeatured || loadingUpcoming;
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 90 }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -523,11 +517,11 @@ export default function HomeScreen() {
                 onPress={() => router.push('/(tabs)/profile')}
               >
                 <View style={styles.avatarContainer}>
-                  <Image
-                    source={{ uri: USER.avatar }}
-                    style={styles.avatar}
+                  <Avatar
+                    source={userData.avatar || undefined}
+                    name={userData.fullName}
+                    size="lg"
                   />
-                  <View style={styles.onlineBadge} />
                 </View>
 
                 <View style={styles.greetingContainer}>
@@ -535,7 +529,7 @@ export default function HomeScreen() {
                     {getGreeting()}
                   </Text>
                   <Text style={styles.userName}>
-                    {USER.name}
+                    {userData.name}
                   </Text>
                 </View>
               </Pressable>
@@ -544,7 +538,7 @@ export default function HomeScreen() {
             {/* Location */}
             <Pressable style={styles.locationRow}>
               <Feather name="map-pin" size={14} color={tokens.colors.primary} />
-              <Text style={styles.locationText}>{USER.location}</Text>
+              <Text style={styles.locationText}>{userData.location}</Text>
               <Feather name="chevron-down" size={14} color={tokens.colors.text.tertiary} />
             </Pressable>
           </Animated.View>
@@ -585,17 +579,13 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.quickStatsGrid}>
-              {QUICK_STATS.map((stat, index) => (
+              {quickStats.map((stat, index) => (
                 <Pressable
                   key={stat.id}
                   style={styles.quickStatCard}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    if (stat.label === 'Events Attended') {
-                      router.push('/(tabs)/tickets');
-                    } else {
-                      router.push('/(tabs)/profile');
-                    }
+                    router.push(stat.route as any);
                   }}
                 >
                   <View style={[styles.quickStatIcon, { backgroundColor: `${stat.color}15` }]}>
@@ -609,7 +599,7 @@ export default function HomeScreen() {
           </Animated.View>
 
           {/* My Reminders Section */}
-          {ACTIVE_REMINDERS.length > 0 && (
+          {displayReminders.length > 0 && (
             <Animated.View
               entering={FadeInDown.delay(220).springify()}
               style={styles.section}
@@ -633,7 +623,7 @@ export default function HomeScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.remindersScroll}
               >
-                {ACTIVE_REMINDERS.map((reminder, index) => (
+                {displayReminders.map((reminder, index) => (
                   <HomeReminderCard key={reminder.id} reminder={reminder} index={index} />
                 ))}
               </ScrollView>
@@ -656,17 +646,23 @@ export default function HomeScreen() {
               </Pressable>
             </View>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.featuredScroll}
-              snapToInterval={CARD_WIDTH + 16}
-              decelerationRate="fast"
-            >
-              {FEATURED_EVENTS.map((event, index) => (
-                <FeaturedEventCard key={event.id} event={event} index={index} />
-              ))}
-            </ScrollView>
+            {loadingFeatured ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={tokens.colors.primary} />
+              </View>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.featuredScroll}
+                snapToInterval={CARD_WIDTH + 16}
+                decelerationRate="fast"
+              >
+                {displayFeaturedEvents.map((event, index) => (
+                  <FeaturedEventCard key={event.id} event={event} index={index} />
+                ))}
+              </ScrollView>
+            )}
           </Animated.View>
 
           {/* Upcoming Events Section */}
@@ -685,11 +681,17 @@ export default function HomeScreen() {
               </Pressable>
             </View>
 
-            <View style={styles.upcomingList}>
-              {UPCOMING_EVENTS.map((event, index) => (
-                <UpcomingEventCard key={event.id} event={event} index={index} />
-              ))}
-            </View>
+            {loadingUpcoming ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={tokens.colors.primary} />
+              </View>
+            ) : (
+              <View style={styles.upcomingList}>
+                {displayUpcomingEvents.map((event, index) => (
+                  <UpcomingEventCard key={event.id} event={event} index={index} />
+                ))}
+              </View>
+            )}
           </Animated.View>
         </ScrollView>
       </SafeAreaView>
@@ -704,6 +706,11 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Header
@@ -842,22 +849,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    marginBottom: 16,
+    marginBottom: 18,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
     color: tokens.colors.text.primary,
     letterSpacing: -0.5,
   },
   seeAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: tokens.colors.primaryLight,
+    borderRadius: 20,
   },
   seeAllText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '700',
     color: tokens.colors.primary,
   },
 
@@ -981,30 +992,33 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: '#FFFFFF',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 6,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.04)',
+    height: 380,
   },
   featuredImage: {
     width: '100%',
-    height: 200,
+    height: 160,
   },
   featuredGradient: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: 200,
+    height: 160,
   },
   priceBadge: {
     position: 'absolute',
-    top: 16,
-    right: 16,
+    top: 12,
+    right: 12,
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -1013,17 +1027,39 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   priceBadgeText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: tokens.colors.primary,
   },
+  pointsBadge: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    backgroundColor: 'rgba(245, 158, 11, 0.95)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  pointsBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
   favoriteButton: {
     position: 'absolute',
-    top: 16,
-    left: 16,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    top: 12,
+    left: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.95)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1034,13 +1070,17 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   featuredContent: {
-    padding: 16,
+    padding: 14,
+    flex: 1,
+    justifyContent: 'space-between',
   },
   featuredTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: tokens.colors.text.primary,
     marginBottom: 8,
+    letterSpacing: -0.2,
+    lineHeight: 22,
   },
   featuredMeta: {
     gap: 6,
@@ -1051,32 +1091,32 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   metaText: {
-    fontSize: 14,
+    fontSize: 13,
     color: tokens.colors.text.secondary,
+    fontWeight: '500',
   },
   attendeesRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 10,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#F5F5F5',
+    borderTopColor: tokens.colors.border.light,
   },
-  avatarStack: {
+  attendeesPill: {
     flexDirection: 'row',
-  },
-  stackedAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: tokens.colors.primaryLight,
+    borderRadius: 999,
   },
   attendeesText: {
     fontSize: 13,
-    color: tokens.colors.text.secondary,
-    fontWeight: '500',
+    color: tokens.colors.primary,
+    fontWeight: '600',
   },
 
   // Upcoming Events
@@ -1087,20 +1127,20 @@ const styles = StyleSheet.create({
   upcomingCard: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 20,
+    padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowRadius: 16,
+    elevation: 5,
     borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderColor: tokens.colors.border.light,
   },
   upcomingImage: {
-    width: 85,
-    height: 85,
-    borderRadius: 14,
+    width: 90,
+    height: 90,
+    borderRadius: 16,
   },
   upcomingContent: {
     flex: 1,
@@ -1139,6 +1179,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: tokens.colors.primary,
   },
+  upcomingPointsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginTop: 6,
+  },
+  upcomingPointsText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#F59E0B',
+  },
 
   // Quick Stats Section
   quickStatsSection: {
@@ -1156,35 +1211,36 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: '45%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
     borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderColor: tokens.colors.border.light,
   },
   quickStatIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   quickStatValue: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '800',
     color: tokens.colors.text.primary,
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
   },
   quickStatLabel: {
-    fontSize: 12,
+    fontSize: 13,
     color: tokens.colors.text.tertiary,
-    marginTop: 2,
+    marginTop: 4,
     textAlign: 'center',
+    fontWeight: '500',
   },
 });

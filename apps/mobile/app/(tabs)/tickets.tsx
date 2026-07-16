@@ -1,9 +1,10 @@
 /**
  * My Events Screen - CampusPulse Design System
  * Shows registered campus events and attendance history
+ * Connected to real Supabase backend
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,6 +12,8 @@ import {
   Pressable,
   Image,
   StyleSheet,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -25,11 +28,15 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { tokens, layout } from '@/lib/styles/unified';
+import { useTickets } from '@/lib/hooks/useTickets';
+import { useAuth } from '@/lib/context/AuthContext';
+import { RegistrationWithEvent } from '@/lib/supabase/database.types';
 
 type TicketStatus = 'active' | 'upcoming' | 'past' | 'cancelled';
 
 interface Ticket {
   id: string;
+  eventId: string;
   eventTitle: string;
   eventImage: string;
   date: string;
@@ -42,178 +49,49 @@ interface Ticket {
   points?: number;
 }
 
-// Yashwanth's Event Registrations - 18 Events Attended
-const TICKETS: Ticket[] = [
-  {
-    id: '1',
-    eventTitle: 'CodeVerse Hackathon 2025',
-    eventImage: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&q=80',
-    date: 'Dec 22-23, 2025',
-    time: '9:00 AM',
-    location: 'Main Auditorium',
-    ticketNumber: 'GITAM-2025-4821',
-    status: 'upcoming',
+// Format registration to ticket display format
+const formatRegistrationToTicket = (reg: RegistrationWithEvent): Ticket => {
+  const event = reg.events;
+  // Use 'date' field from the database schema
+  const eventDate = event?.date ? new Date(event.date) : new Date();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let status: TicketStatus = 'upcoming';
+  if (reg.status === 'cancelled') {
+    status = 'cancelled';
+  } else if (reg.checked_in) {
+    // Use checked_in boolean instead of status === 'attended'
+    status = 'past';
+  } else if (eventDate < today) {
+    status = 'past';
+  } else if (eventDate.toDateString() === today.toDateString()) {
+    status = 'active';
+  }
+
+  return {
+    id: reg.id,
+    eventId: reg.event_id ?? '',
+    eventTitle: event?.title || 'Unknown Event',
+    eventImage: event?.image_url || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800&q=80',
+    date: eventDate.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }),
+    time: eventDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }),
+    location: event?.venue || 'TBD',
+    ticketNumber: reg.qr_token || `GITAM-${reg.id.slice(0, 8).toUpperCase()}`,
+    status,
     price: 'Free',
-    category: 'Hackathon',
-    points: 100,
-  },
-  {
-    id: '2',
-    eventTitle: 'AI/ML Workshop Series',
-    eventImage: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800&q=80',
-    date: 'Dec 21, 2025',
-    time: '10:00 AM',
-    location: 'Computer Lab 301',
-    ticketNumber: 'GITAM-2025-4756',
-    status: 'active',
-    price: 'Free',
-    category: 'Workshop',
-    points: 50,
-  },
-  {
-    id: '3',
-    eventTitle: 'Guest Lecture: Future of FinTech',
-    eventImage: 'https://images.unsplash.com/photo-1560439514-4e9645039924?w=800&q=80',
-    date: 'Dec 15, 2025',
-    time: '2:00 PM',
-    location: 'Seminar Hall A',
-    ticketNumber: 'GITAM-2025-4512',
-    status: 'past',
-    price: 'Free',
-    category: 'Seminar',
-    points: 30,
-  },
-  {
-    id: '4',
-    eventTitle: 'Web Dev Bootcamp - React',
-    eventImage: 'https://images.unsplash.com/photo-1517180102446-f3ece451e9d8?w=800&q=80',
-    date: 'Dec 08, 2025',
-    time: '10:00 AM',
-    location: 'IT Lab 201',
-    ticketNumber: 'GITAM-2025-4234',
-    status: 'past',
-    price: 'Free',
-    category: 'Workshop',
-    points: 50,
-  },
-  {
-    id: '5',
-    eventTitle: 'Annual Cultural Fest - Rhythm',
-    eventImage: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&q=80',
-    date: 'Nov 26-28, 2025',
-    time: '5:00 PM',
-    location: 'Open Air Theatre',
-    ticketNumber: 'GITAM-2025-3987',
-    status: 'past',
-    price: 'Free',
-    category: 'Cultural',
-    points: 75,
-  },
-  {
-    id: '6',
-    eventTitle: 'Data Science Symposium',
-    eventImage: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&q=80',
-    date: 'Nov 20, 2025',
-    time: '9:30 AM',
-    location: 'Tech Park Auditorium',
-    ticketNumber: 'GITAM-2025-3756',
-    status: 'past',
-    price: 'Free',
-    category: 'Technical',
-    points: 40,
-  },
-  {
-    id: '7',
-    eventTitle: 'Entrepreneurship Summit',
-    eventImage: 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=800&q=80',
-    date: 'Nov 12, 2025',
-    time: '10:00 AM',
-    location: 'Conference Hall',
-    ticketNumber: 'GITAM-2025-3512',
-    status: 'past',
-    price: 'Free',
-    category: 'Seminar',
-    points: 35,
-  },
-  {
-    id: '8',
-    eventTitle: 'Cloud Computing Workshop',
-    eventImage: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&q=80',
-    date: 'Nov 05, 2025',
-    time: '2:00 PM',
-    location: 'Cloud Lab',
-    ticketNumber: 'GITAM-2025-3298',
-    status: 'past',
-    price: 'Free',
-    category: 'Workshop',
-    points: 45,
-  },
-  {
-    id: '9',
-    eventTitle: 'Photography Club Exhibition',
-    eventImage: 'https://images.unsplash.com/photo-1554048612-b6a482bc67e5?w=800&q=80',
-    date: 'Oct 28, 2025',
-    time: '11:00 AM',
-    location: 'Art Gallery',
-    ticketNumber: 'GITAM-2025-3045',
-    status: 'past',
-    price: 'Free',
-    category: 'Club',
-    points: 20,
-  },
-  {
-    id: '10',
-    eventTitle: 'Inter-College Basketball Tournament',
-    eventImage: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&q=80',
-    date: 'Oct 22, 2025',
-    time: '9:00 AM',
-    location: 'Sports Complex',
-    ticketNumber: 'GITAM-2025-2856',
-    status: 'past',
-    price: 'Free',
-    category: 'Sports',
-    points: 30,
-  },
-  {
-    id: '11',
-    eventTitle: 'Cybersecurity Awareness Workshop',
-    eventImage: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&q=80',
-    date: 'Oct 15, 2025',
-    time: '3:00 PM',
-    location: 'Seminar Hall B',
-    ticketNumber: 'GITAM-2025-2612',
-    status: 'past',
-    price: 'Free',
-    category: 'Workshop',
-    points: 40,
-  },
-  {
-    id: '12',
-    eventTitle: 'Open Source Contribution Day',
-    eventImage: 'https://images.unsplash.com/photo-1556075798-4825dfaaf498?w=800&q=80',
-    date: 'Oct 08, 2025',
-    time: '10:00 AM',
-    location: 'Innovation Hub',
-    ticketNumber: 'GITAM-2025-2389',
-    status: 'past',
-    price: 'Free',
-    category: 'Technical',
-    points: 60,
-  },
-  {
-    id: '13',
-    eventTitle: 'Freshers Orientation',
-    eventImage: 'https://images.unsplash.com/photo-1523580494863-6f3031224c94?w=800&q=80',
-    date: 'Aug 15, 2023',
-    time: '9:00 AM',
-    location: 'Main Auditorium',
-    ticketNumber: 'GITAM-2023-0124',
-    status: 'past',
-    price: 'Free',
-    category: 'Cultural',
-    points: 25,
-  },
-];
+    category: event?.category || 'Event',
+    points: event?.points || 0,  // Use 'points' field from database schema
+  };
+};
 
 // Tab Component
 interface TabProps {
@@ -360,9 +238,9 @@ function TicketCard({ ticket, index, onPress, onShowQR, onCheckIn }: TicketCardP
 
           {/* Ticket Footer */}
           <View style={styles.ticketFooter}>
-            <View>
+            <View style={styles.ticketNumberContainer}>
               <Text style={styles.ticketNumberLabel}>Ticket No.</Text>
-              <Text style={styles.ticketNumber}>{ticket.ticketNumber}</Text>
+              <Text style={styles.ticketNumber} numberOfLines={1}>{ticket.ticketNumber}</Text>
             </View>
             {isActive ? (
               <View style={styles.ticketActions}>
@@ -370,20 +248,28 @@ function TicketCard({ ticket, index, onPress, onShowQR, onCheckIn }: TicketCardP
                   style={styles.qrButton}
                   onPress={handleShowQR}
                 >
-                  <Feather name="maximize" size={18} color={tokens.colors.primary} />
+                  <Feather name="maximize" size={16} color={tokens.colors.primary} />
                 </Pressable>
                 <Pressable
                   style={styles.checkInButton}
                   onPress={handleCheckIn}
                 >
-                  <Feather name="camera" size={16} color="#FFFFFF" />
+                  <Feather name="camera" size={14} color="#FFFFFF" />
                   <Text style={styles.checkInButtonText}>Check-in</Text>
                 </Pressable>
               </View>
             ) : (
-              <View style={styles.statusBadge}>
-                <Feather name="check-circle" size={14} color={tokens.colors.success} />
-                <Text style={styles.statusBadgeText}>Attended</Text>
+              <View style={styles.pastEventBadges}>
+                {ticket.points && (
+                  <View style={styles.pointsEarnedBadge}>
+                    <Feather name="award" size={11} color="#F59E0B" />
+                    <Text style={styles.pointsEarnedText}>+{ticket.points}</Text>
+                  </View>
+                )}
+                <View style={styles.statusBadge}>
+                  <Feather name="check-circle" size={12} color={tokens.colors.success} />
+                  <Text style={styles.statusBadgeText}>Attended</Text>
+                </View>
               </View>
             )}
           </View>
@@ -420,11 +306,48 @@ export default function TicketsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
+  const [refreshing, setRefreshing] = useState(false);
 
-  const upcomingTickets = TICKETS.filter((t) => t.status === 'upcoming');
-  const pastTickets = TICKETS.filter((t) => t.status === 'past');
+  // Real data from Supabase
+  const { isAuthenticated } = useAuth();
+  const { upcoming, past, isLoading, error, refresh } = useTickets();
+
+  // Format tickets for display
+  const upcomingTickets = useMemo(() => upcoming.map(formatRegistrationToTicket), [upcoming]);
+  const pastTickets = useMemo(() => past.map(formatRegistrationToTicket), [past]);
 
   const currentTickets = activeTab === 'upcoming' ? upcomingTickets : pastTickets;
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  }, [refresh]);
+
+  // Show login prompt if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <View style={styles.container}>
+        <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+          <View>
+            <Text style={styles.headerTitle}>My Events</Text>
+            <Text style={styles.headerSubtitle}>Your registered events</Text>
+          </View>
+        </View>
+        <View style={styles.loginPrompt}>
+          <Feather name="lock" size={48} color={tokens.colors.text.tertiary} />
+          <Text style={styles.loginPromptTitle}>Sign In Required</Text>
+          <Text style={styles.loginPromptText}>Please sign in to view your registered events</Text>
+          <Pressable
+            style={styles.loginButton}
+            onPress={() => router.push('/auth/login')}
+          >
+            <Text style={styles.loginButtonText}>Sign In</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -461,46 +384,61 @@ export default function TicketsScreen() {
         />
       </Animated.View>
 
-      {/* Tickets List */}
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + 100 },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {currentTickets.length > 0 ? (
-          currentTickets.map((ticket, index) => (
-            <TicketCard
-              key={ticket.id}
-              ticket={ticket}
-              index={index}
-              onPress={() => router.push(`/event/${ticket.id}`)}
-              onShowQR={() => router.push({
-                pathname: '/ticket-qr',
-                params: {
-                  ticketNumber: ticket.ticketNumber,
-                  eventTitle: ticket.eventTitle,
-                  date: ticket.date,
-                  time: ticket.time,
-                  location: ticket.location,
-                  status: ticket.status,
-                }
-              })}
-              onCheckIn={() => router.push({
-                pathname: '/qr-scanner',
-                params: {
-                  eventId: ticket.id,
-                  ticketNumber: ticket.ticketNumber,
-                }
-              })}
+      {/* Loading State */}
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={tokens.colors.primary} />
+          <Text style={styles.loadingText}>Loading your events...</Text>
+        </View>
+      ) : (
+        /* Tickets List */
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: insets.bottom + 90 },
+          ]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={tokens.colors.primary}
             />
-          ))
-        ) : (
-          <EmptyState type={activeTab} />
-        )}
-      </ScrollView>
+          }
+        >
+          {currentTickets.length > 0 ? (
+            currentTickets.map((ticket, index) => (
+              <TicketCard
+                key={ticket.id}
+                ticket={ticket}
+                index={index}
+                onPress={() => router.push(`/event/${ticket.eventId}`)}
+                onShowQR={() => router.push({
+                  pathname: '/ticket-qr',
+                  params: {
+                    ticketNumber: ticket.ticketNumber,
+                    eventTitle: ticket.eventTitle,
+                    date: ticket.date,
+                    time: ticket.time,
+                    location: ticket.location,
+                    status: ticket.status,
+                  }
+                })}
+                onCheckIn={() => router.push({
+                  pathname: '/qr-scanner',
+                  params: {
+                    eventId: ticket.eventId,
+                    ticketNumber: ticket.ticketNumber,
+                  }
+                })}
+              />
+            ))
+          ) : (
+            <EmptyState type={activeTab} />
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -515,50 +453,57 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingBottom: 20,
     backgroundColor: tokens.colors.background.primary,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 32,
+    fontWeight: '800',
     color: tokens.colors.text.primary,
+    letterSpacing: -0.5,
   },
   headerSubtitle: {
     fontSize: 14,
     color: tokens.colors.text.secondary,
-    marginTop: 2,
+    marginTop: 4,
+    fontWeight: '500',
   },
   headerButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: tokens.colors.background.secondary,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: tokens.colors.background.tertiary,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: tokens.colors.border.light,
   },
   tabsContainer: {
     flexDirection: 'row',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 14,
     backgroundColor: tokens.colors.background.primary,
     borderBottomWidth: 1,
     borderBottomColor: tokens.colors.border.light,
-    gap: 12,
+    gap: 14,
   },
   tab: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
+    paddingVertical: 16,
+    borderRadius: 16,
     backgroundColor: tokens.colors.background.tertiary,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: tokens.colors.border.light,
   },
   tabActive: {
     backgroundColor: tokens.colors.primary,
+    borderColor: tokens.colors.primary,
     shadowColor: tokens.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 5,
   },
   tabInner: {
     flexDirection: 'row',
@@ -566,8 +511,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tabText: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: tokens.colors.text.secondary,
   },
   tabTextActive: {
@@ -599,18 +544,18 @@ const styles = StyleSheet.create({
   },
   ticketCard: {
     backgroundColor: tokens.colors.background.primary,
-    borderRadius: 20,
+    borderRadius: 24,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 5,
     borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderColor: tokens.colors.border.light,
   },
   ticketImageContainer: {
-    height: 140,
+    height: 150,
     position: 'relative',
   },
   ticketImage: {
@@ -636,28 +581,30 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   ticketInfo: {
-    padding: 16,
+    padding: 18,
   },
   ticketTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 19,
+    fontWeight: '800',
     color: tokens.colors.text.primary,
-    marginBottom: 12,
+    marginBottom: 14,
+    letterSpacing: -0.2,
   },
   ticketDetails: {
     flexDirection: 'row',
-    gap: 16,
-    marginBottom: 8,
+    gap: 18,
+    marginBottom: 10,
   },
   ticketDetailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   ticketDetailText: {
-    fontSize: 13,
+    fontSize: 14,
     color: tokens.colors.text.secondary,
     flex: 1,
+    fontWeight: '500',
   },
   dividerContainer: {
     flexDirection: 'row',
@@ -689,21 +636,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  ticketNumberContainer: {
+    flex: 1,
+    marginRight: 12,
   },
   ticketNumberLabel: {
-    fontSize: 11,
-    fontWeight: '500',
+    fontSize: 10,
+    fontWeight: '600',
     color: tokens.colors.text.tertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   ticketNumber: {
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '700',
     color: tokens.colors.text.primary,
     fontFamily: 'monospace',
+    letterSpacing: 0.2,
   },
   qrButton: {
     width: 40,
@@ -721,30 +674,52 @@ const styles = StyleSheet.create({
   checkInButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     backgroundColor: tokens.colors.primary,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 10,
+    height: 40,
   },
   checkInButtonText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#FFFFFF',
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     backgroundColor: tokens.colors.successLight,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
   },
   statusBadgeText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: tokens.colors.success,
+  },
+  pastEventBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
+  },
+  pointsEarnedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  pointsEarnedText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#F59E0B',
   },
   emptyState: {
     alignItems: 'center',
@@ -771,5 +746,46 @@ const styles = StyleSheet.create({
     color: tokens.colors.text.secondary,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: tokens.colors.text.tertiary,
+    marginTop: 12,
+  },
+  loginPrompt: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+  },
+  loginPromptTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: tokens.colors.text.primary,
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  loginPromptText: {
+    fontSize: 14,
+    color: tokens.colors.text.secondary,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  loginButton: {
+    backgroundColor: tokens.colors.primary,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  loginButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

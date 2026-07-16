@@ -34,42 +34,61 @@ import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-ca
 import * as Haptics from 'expo-haptics';
 
 import { tokens } from '@/lib/styles/unified';
+import { processCheckIn, parseQRData } from '@/lib/services/qrService';
+import { useAuth } from '@/lib/context/AuthContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SCANNER_SIZE = SCREEN_WIDTH * 0.75;
 
-// Mock QR validation (in production, this would call your backend)
-const validateQRCode = async (qrData: string, eventId: string): Promise<{
+// Real QR validation using qrService
+const validateQRCode = async (qrData: string, adminUserId?: string): Promise<{
   success: boolean;
   message: string;
   pointsEarned?: number;
   eventName?: string;
   checkInTime?: string;
 }> => {
-  // Simulate API call
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  try {
+    // Try to parse as base64 encoded QR data first
+    const parsedData = parseQRData(qrData);
 
-  // Mock validation logic - accept various QR formats
-  if (qrData.includes('CP-') || qrData.includes('CAMPUS') || qrData.includes('EVENT') || qrData.length > 5) {
+    // Use the token from parsed data, or treat the raw data as a token
+    const qrToken = parsedData?.token || qrData;
+
+    // Process the check-in using the real service
+    const result = await processCheckIn(qrToken, adminUserId);
+
+    if (result.success && result.data) {
+      return {
+        success: true,
+        message: result.message,
+        pointsEarned: result.data.pointsAwarded,
+        eventName: result.data.eventTitle,
+        checkInTime: new Date(result.data.checkInTime).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit'
+        }),
+      };
+    }
+
     return {
-      success: true,
-      message: 'Check-in successful!',
-      pointsEarned: 50,
-      eventName: 'CodeVerse Hackathon 2025',
-      checkInTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      success: false,
+      message: result.message || 'Check-in failed',
+    };
+  } catch (error) {
+    console.error('QR validation error:', error);
+    return {
+      success: false,
+      message: 'Failed to validate QR code',
     };
   }
-
-  return {
-    success: false,
-    message: 'Invalid QR code or event has ended',
-  };
 };
 
 export default function QRScannerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { eventId, ticketNumber } = useLocalSearchParams();
+  const { user } = useAuth();
 
   const [permission, requestPermission] = useCameraPermissions();
   const [isScanning, setIsScanning] = useState(true);
@@ -142,8 +161,8 @@ export default function QRScannerScreen() {
     // Haptic feedback on scan
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    // Validate the QR code
-    const validationResult = await validateQRCode(result.data, eventId as string || '1');
+    // Validate the QR code using real service
+    const validationResult = await validateQRCode(result.data, user?.id);
 
     setScanResult(validationResult);
     setShowResult(true);

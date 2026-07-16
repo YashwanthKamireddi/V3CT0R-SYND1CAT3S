@@ -189,7 +189,7 @@ export default function HelpScreen() {
 
       {/* Header */}
       <LinearGradient
-        colors={['#FF6B35', '#FF8F5C']}
+        colors={[tokens.colors.primary, tokens.colors.primaryDark]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.header, { paddingTop: insets.top }]}
@@ -299,7 +299,7 @@ export default function HelpScreen() {
           style={styles.helpCard}
         >
           <LinearGradient
-            colors={['#FFF0EB', '#FFE4DB']}
+            colors={[tokens.colors.primaryLight, tokens.colors.primaryLight]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.helpCardGradient}

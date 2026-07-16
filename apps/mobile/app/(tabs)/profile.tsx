@@ -1,9 +1,10 @@
 /**
  * Profile Screen - CampusPulse Design System
  * Production-ready with unified typography and layout
+ * Connected to real Supabase backend
  */
 
-import React from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,6 +13,8 @@ import {
   Image,
   StyleSheet,
   Switch,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -26,25 +29,9 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { tokens, layout } from '@/lib/styles/unified';
-
-// Student Profile Data
-const USER = {
-  name: 'Yashwanth Kamireddi',
-  email: 'yashwanth.k@gitam.in',
-  avatar: 'https://i.pravatar.cc/200?img=12',
-  phone: '+91 63026 83827',
-  memberSince: 'Aug 2023',
-  department: 'Computer Science & Engineering',
-  year: '2nd Year',
-  regNo: '2023002748',
-};
-
-// Campus Activity Stats - Meaningful University Metrics
-const STATS = [
-  { id: '1', label: 'Events Attended', value: '18', icon: 'calendar' as const },
-  { id: '2', label: 'This Semester', value: '12', icon: 'book-open' as const },
-  { id: '3', label: 'Certificates', value: '8', icon: 'award' as const },
-];
+import { Avatar } from '@/components/ui/Avatar';
+import { useAuth } from '@/lib/context/AuthContext';
+import { useProfile, useUserStats, useUserRank } from '@/lib/hooks/useProfile';
 
 // Menu Items
 interface MenuItem {
@@ -62,16 +49,17 @@ const MENU_SECTIONS: { title: string; items: MenuItem[] }[] = [
   {
     title: 'Campus Activity',
     items: [
-      { id: '1', icon: 'award', label: 'My Achievements', subtitle: '12 badges earned', route: '/profile/achievements' },
-      { id: '2', icon: 'users', label: 'My Clubs', subtitle: '4 clubs joined', route: '/profile/clubs' },
-      { id: '3', icon: 'gift', label: 'Rewards Store', subtitle: 'Redeem your rewards', route: '/profile/rewards' },
+      { id: '1', icon: 'award', label: 'My Achievements', subtitle: 'Badges earned', route: '/profile/achievements' },
+      { id: '2', icon: 'users', label: 'My Clubs', subtitle: 'Clubs joined', route: '/profile/clubs' },
+      { id: '3', icon: 'gift', label: 'Rewards Store', subtitle: 'Redeem your points', route: '/profile/rewards' },
+      { id: '4', icon: 'trending-up', label: 'Leaderboard', subtitle: 'Campus rankings', route: '/leaderboard' },
     ],
   },
   {
     title: 'Account',
     items: [
-      { id: '4', icon: 'user', label: 'Edit Profile', subtitle: 'Update your information', route: '/profile/edit' },
-      { id: '5', icon: 'bell', label: 'Notifications', hasSwitch: true, switchValue: true },
+      { id: '5', icon: 'user', label: 'Edit Profile', subtitle: 'Update your information', route: '/profile/edit' },
+      { id: '6', icon: 'bell', label: 'Notifications', hasSwitch: true, switchValue: true },
     ],
   },
   {
@@ -84,15 +72,26 @@ const MENU_SECTIONS: { title: string; items: MenuItem[] }[] = [
   },
 ];
 
+// Stat type definition
+interface Stat {
+  id: string;
+  label: string;
+  value: string;
+  icon: keyof typeof Feather.glyphMap;
+  color: string;
+  route?: string;
+}
+
 // Stat Card Component
 interface StatCardProps {
-  stat: typeof STATS[0];
+  stat: Stat;
   index: number;
   onPress: () => void;
 }
 
 function StatCard({ stat, index, onPress }: StatCardProps) {
   const scale = useSharedValue(1);
+  const statColor = stat.color || tokens.colors.primary;
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -119,11 +118,11 @@ function StatCard({ stat, index, onPress }: StatCardProps) {
         onPress={handlePress}
       >
         <Animated.View style={[styles.statCard, animatedStyle]}>
-          <View style={styles.statIconContainer}>
-            <Feather name={stat.icon} size={20} color={tokens.colors.primary} />
+          <View style={[styles.statIconContainer, { backgroundColor: `${statColor}15` }]}>
+            <Feather name={stat.icon} size={18} color={statColor} />
           </View>
           <Text style={styles.statValue}>{stat.value}</Text>
-          <Text style={styles.statLabel}>{stat.label}</Text>
+          <Text style={styles.statLabel} numberOfLines={1}>{stat.label}</Text>
         </Animated.View>
       </Pressable>
     </Animated.View>
@@ -210,17 +209,98 @@ function MenuItemRow({ item, isLast, onPress }: MenuItemProps) {
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [refreshing, setRefreshing] = React.useState(false);
 
-  const handleLogout = () => {
+  // Real data from Supabase
+  const { user, profile, isAuthenticated, signOut } = useAuth();
+  const { stats, isLoading: loadingStats, refresh: refreshStats } = useUserStats();
+  const { rank, isLoading: loadingRank, refresh: refreshRank } = useUserRank();
+
+  // Prepare user data
+  const userData = useMemo(() => ({
+    name: profile?.full_name || user?.email?.split('@')[0] || 'Guest',
+    email: user?.email || '',
+    avatar: profile?.avatar_url || '',
+    memberSince: profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '',
+    department: profile?.branch || 'Not Set',
+    year: profile?.year || 'Not Set',
+    regNo: profile?.student_id || '',
+  }), [profile, user]);
+
+  // Prepare stats with real data
+  const displayStats = useMemo(() => [
+    {
+      id: '1',
+      label: 'Campus Points',
+      value: stats?.totalPoints?.toString() || '0',
+      icon: 'award' as const,
+      color: '#F59E0B',
+      route: '/profile/rewards'
+    },
+    {
+      id: '2',
+      label: 'Events Attended',
+      value: stats?.totalEvents?.toString() || '0',
+      icon: 'calendar' as const,
+      color: '#6366F1',
+      route: '/(tabs)/tickets'
+    },
+    {
+      id: '3',
+      label: 'Campus Rank',
+      value: rank ? `#${rank}` : '-',
+      icon: 'trending-up' as const,
+      color: '#10B981',
+      route: '/leaderboard'
+    },
+  ], [stats, rank]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([refreshStats(), refreshRank()]);
+    setRefreshing(false);
+  }, [refreshStats, refreshRank]);
+
+  const handleLogout = async () => {
+    await signOut();
     router.replace('/auth/login');
   };
+
+  // Show login prompt if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <View style={styles.container}>
+        <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+          <Text style={styles.headerTitle}>Profile</Text>
+        </View>
+        <View style={styles.loginPrompt}>
+          <Feather name="user" size={48} color={tokens.colors.text.tertiary} />
+          <Text style={styles.loginPromptTitle}>Sign In Required</Text>
+          <Text style={styles.loginPromptText}>Please sign in to view your profile</Text>
+          <Pressable
+            style={styles.loginButton}
+            onPress={() => router.push('/auth/login')}
+          >
+            <Text style={styles.loginButtonText}>Sign In</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 90 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={tokens.colors.primary}
+          />
+        }
       >
         {/* Header */}
         <Animated.View
@@ -242,38 +322,42 @@ export default function ProfileScreen() {
           style={styles.profileCard}
         >
           <View style={styles.avatarContainer}>
-            <Image source={{ uri: USER.avatar }} style={styles.avatar} />
+            <Avatar source={userData.avatar || undefined} name={userData.name} size="2xl" />
             <Pressable style={styles.editAvatarButton}>
               <Feather name="camera" size={16} color="#FFFFFF" />
             </Pressable>
           </View>
-          <Text style={styles.userName}>{USER.name}</Text>
-          <Text style={styles.userEmail}>{USER.email}</Text>
+          <Text style={styles.userName}>{userData.name}</Text>
+          <Text style={styles.userEmail}>{userData.email}</Text>
 
           {/* Registration Number Badge */}
-          <View style={styles.regNoBadge}>
-            <Feather name="hash" size={12} color={tokens.colors.primary} />
-            <Text style={styles.regNoText}>{USER.regNo}</Text>
-          </View>
+          {userData.regNo && (
+            <View style={styles.regNoBadge}>
+              <Feather name="hash" size={12} color={tokens.colors.primary} />
+              <Text style={styles.regNoText}>{userData.regNo}</Text>
+            </View>
+          )}
 
           {/* Department & Year */}
           <View style={styles.academicInfo}>
             <View style={styles.academicBadge}>
               <Feather name="book" size={12} color={tokens.colors.text.secondary} />
-              <Text style={styles.academicText}>{USER.department}</Text>
+              <Text style={styles.academicText}>{userData.department}</Text>
             </View>
             <View style={styles.academicBadge}>
               <Feather name="calendar" size={12} color={tokens.colors.text.secondary} />
-              <Text style={styles.academicText}>{USER.year}</Text>
+              <Text style={styles.academicText}>{userData.year}</Text>
             </View>
           </View>
 
-          <View style={styles.memberSinceContainer}>
-            <Feather name="award" size={14} color={tokens.colors.primary} />
-            <Text style={styles.memberSinceText}>
-              Member since {USER.memberSince}
-            </Text>
-          </View>
+          {userData.memberSince && (
+            <View style={styles.memberSinceContainer}>
+              <Feather name="award" size={14} color={tokens.colors.primary} />
+              <Text style={styles.memberSinceText}>
+                Member since {userData.memberSince}
+              </Text>
+            </View>
+          )}
           <Pressable
             style={styles.editProfileButton}
             onPress={() => router.push('/profile/edit' as any)}
@@ -284,15 +368,13 @@ export default function ProfileScreen() {
 
         {/* Stats */}
         <View style={styles.statsContainer}>
-          {STATS.map((stat, index) => (
+          {displayStats.map((stat, index) => (
             <StatCard
               key={stat.id}
               stat={stat}
               index={index}
               onPress={() => {
-                if (stat.id === '1') router.push('/tickets');
-                else if (stat.id === '2') router.push('/tickets');
-                else if (stat.id === '3') router.push('/profile/achievements');
+                if (stat.route) router.push(stat.route as any);
               }}
             />
           ))}
@@ -355,65 +437,80 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingBottom: 20,
     backgroundColor: tokens.colors.background.primary,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 32,
+    fontWeight: '800',
     color: tokens.colors.text.primary,
+    letterSpacing: -0.5,
   },
   settingsButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: tokens.colors.background.secondary,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: tokens.colors.background.tertiary,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: tokens.colors.border.light,
   },
   profileCard: {
     alignItems: 'center',
     backgroundColor: tokens.colors.background.primary,
-    paddingVertical: 24,
+    paddingVertical: 28,
     paddingHorizontal: 20,
-    marginBottom: 16,
+    marginBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: tokens.colors.border.light,
   },
   avatarContainer: {
     position: 'relative',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
     borderWidth: 4,
     borderColor: tokens.colors.primaryLight,
+    shadowColor: tokens.colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   editAvatarButton: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    bottom: 4,
+    right: 4,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: tokens.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: tokens.colors.background.primary,
+    shadowColor: tokens.colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   userName: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '800',
     color: tokens.colors.text.primary,
-    marginBottom: 4,
+    marginBottom: 6,
+    letterSpacing: -0.3,
   },
   userEmail: {
-    fontSize: 14,
+    fontSize: 15,
     color: tokens.colors.text.secondary,
-    marginBottom: 8,
+    marginBottom: 10,
+    fontWeight: '500',
   },
   regNoBadge: {
     flexDirection: 'row',
@@ -479,126 +576,168 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 12,
-    marginBottom: 24,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    gap: 10,
+    marginBottom: 20,
   },
   statCard: {
-    flex: 1,
+    width: 108,
+    height: 110,
     backgroundColor: tokens.colors.background.primary,
     borderRadius: 16,
-    padding: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
     alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
     borderWidth: 1,
-    borderColor: '#F5F5F5',
+    borderColor: tokens.colors.border.light,
   },
   statIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     backgroundColor: tokens.colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   statValue: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
     color: tokens.colors.text.primary,
-    marginBottom: 4,
+    marginBottom: 2,
     letterSpacing: -0.3,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 10,
     color: tokens.colors.text.secondary,
-    fontWeight: '500',
+    fontWeight: '600',
+    textAlign: 'center',
   },
   menuSection: {
     paddingHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: 24,
   },
   menuSectionTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     color: tokens.colors.text.tertiary,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 12,
+    letterSpacing: 0.8,
+    marginBottom: 14,
     marginLeft: 4,
   },
   menuCard: {
     backgroundColor: tokens.colors.background.primary,
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowRadius: 16,
+    elevation: 4,
     borderWidth: 1,
-    borderColor: '#F5F5F5',
+    borderColor: tokens.colors.border.light,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: 18,
   },
   menuItemBorder: {
     borderBottomWidth: 1,
     borderBottomColor: tokens.colors.border.light,
   },
   menuIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: tokens.colors.background.secondary,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: tokens.colors.background.tertiary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 16,
   },
   menuContent: {
     flex: 1,
   },
   menuLabel: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: tokens.colors.text.primary,
   },
   menuSubtitle: {
     fontSize: 13,
     color: tokens.colors.text.tertiary,
-    marginTop: 2,
+    marginTop: 3,
+    fontWeight: '500',
   },
   logoutSection: {
     paddingHorizontal: 20,
-    marginTop: 8,
-    marginBottom: 20,
+    marginTop: 12,
+    marginBottom: 24,
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 10,
     backgroundColor: tokens.colors.background.primary,
-    paddingVertical: 16,
-    borderRadius: 16,
-    borderWidth: 1,
+    paddingVertical: 18,
+    borderRadius: 20,
+    borderWidth: 2,
     borderColor: tokens.colors.error,
+    shadowColor: tokens.colors.error,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 2,
   },
   logoutText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: tokens.colors.error,
   },
   versionText: {
     textAlign: 'center',
-    fontSize: 12,
+    fontSize: 13,
     color: tokens.colors.text.tertiary,
-    marginBottom: 24,
+    marginBottom: 28,
+    fontWeight: '500',
+  },
+  loginPrompt: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    gap: 16,
+  },
+  loginPromptTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: tokens.colors.text.primary,
+    marginTop: 8,
+  },
+  loginPromptText: {
+    fontSize: 15,
+    color: tokens.colors.text.secondary,
+    textAlign: 'center',
+  },
+  loginButton: {
+    backgroundColor: tokens.colors.primary,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 16,
+    marginTop: 8,
+  },
+  loginButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

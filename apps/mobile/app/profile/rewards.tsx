@@ -25,6 +25,8 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { tokens } from '@/lib/styles/unified';
+import { useAuth } from '@/lib/context/AuthContext';
+import { supabase } from '@/lib/supabase/client';
 
 // Reward interface
 interface Reward {
@@ -136,10 +138,11 @@ const CATEGORIES = [
 export default function RewardsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { profile, refreshProfile } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedReward, setSelectedReward] = useState<Reward | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [userPoints, setUserPoints] = useState(USER_POINTS);
+  const userPoints = profile?.total_points ?? 0;
 
   const filteredRewards = selectedCategory === 'all'
     ? REWARDS
@@ -157,15 +160,22 @@ export default function RewardsScreen() {
     setShowConfirmModal(true);
   };
 
-  const confirmRedeem = () => {
-    if (selectedReward) {
-      setUserPoints(prev => prev - selectedReward.points);
+  const confirmRedeem = async () => {
+    if (!selectedReward || !profile) return;
+    try {
+      await supabase
+        .from('profiles')
+        .update({ total_points: userPoints - selectedReward.points })
+        .eq('id', profile.id);
+      await refreshProfile();
       setShowConfirmModal(false);
       Alert.alert(
         'Reward Redeemed! 🎉',
-        `You've successfully redeemed "${selectedReward.name}". Check your email for details.`
+        `You've successfully redeemed "${selectedReward.name}". Check your email for details.`,
       );
       setSelectedReward(null);
+    } catch (e) {
+      Alert.alert('Redemption failed', 'Please try again.');
     }
   };
 
@@ -178,9 +188,18 @@ export default function RewardsScreen() {
           headerStyle: { backgroundColor: tokens.colors.background.primary },
           headerTitleStyle: { color: tokens.colors.text.primary, fontWeight: '600' },
           headerShadowVisible: false,
+          headerBackVisible: false,
+          headerTintColor: tokens.colors.text.primary,
           headerLeft: () => (
-            <Pressable onPress={() => router.back()} style={styles.backButton}>
-              <Feather name="chevron-left" size={24} color={tokens.colors.text.primary} />
+            <Pressable
+              onPress={() => router.back()}
+              hitSlop={12}
+              style={({ pressed }) => [
+                styles.backButton,
+                pressed && { opacity: 0.6 },
+              ]}
+            >
+              <Feather name="chevron-left" size={22} color={tokens.colors.text.primary} />
             </Pressable>
           ),
         }}
@@ -434,8 +453,13 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.colors.background.primary,
   },
   backButton: {
-    padding: 8,
-    marginLeft: -8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
   },
   scrollView: {
     flex: 1,
@@ -530,27 +554,27 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '800',
     color: tokens.colors.text.primary,
-    marginBottom: 16,
-    marginTop: 8,
+    marginBottom: 20,
+    marginTop: 12,
   },
   popularContainer: {
-    paddingBottom: 8,
-    gap: 12,
+    paddingBottom: 10,
+    gap: 14,
   },
   popularCard: {
-    width: 140,
+    width: 150,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
   popularIcon: {
     width: 56,
@@ -588,13 +612,15 @@ const styles = StyleSheet.create({
   },
   rewardCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 20,
+    padding: 16,
+    minHeight: 220,
+    flexDirection: 'column',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
   rewardCardDisabled: {
     opacity: 0.6,
@@ -612,12 +638,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: tokens.colors.text.primary,
     marginBottom: 4,
+    minHeight: 36, // 2 lines reserved
   },
   rewardDesc: {
     fontSize: 12,
     color: tokens.colors.text.secondary,
     lineHeight: 16,
     marginBottom: 8,
+    minHeight: 32, // 2 lines reserved
   },
   stockText: {
     fontSize: 11,

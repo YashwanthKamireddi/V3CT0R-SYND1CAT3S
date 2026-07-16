@@ -1,9 +1,10 @@
 /**
  * Explore Screen - CampusPulse Design System
  * Search, filter, and discover events with unified typography
+ * Connected to real Supabase backend
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +14,8 @@ import {
   Image,
   StyleSheet,
   Modal,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -28,6 +31,8 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { tokens, layout } from '@/lib/styles/unified';
+import { useEvents } from '@/lib/hooks/useEvents';
+import { EventWithClub } from '@/lib/supabase/database.types';
 
 // Types
 interface Event {
@@ -40,117 +45,53 @@ interface Event {
   price: string | number;
   category: string;
   attendees: number;
+  points?: number;
+  organizer?: string;
+  organizerLogo?: string;
 }
 
 interface Category {
-  id: string;
+  id: EventCategory;
   name: string;
   icon: keyof typeof Feather.glyphMap;
 }
 
-// Categories - Campus-focused
+// Categories - Campus Club focused
 const CATEGORIES: Category[] = [
   { id: 'all', name: 'All Events', icon: 'grid' },
   { id: 'workshop', name: 'Workshops', icon: 'tool' },
   { id: 'seminar', name: 'Seminars', icon: 'book-open' },
   { id: 'cultural', name: 'Cultural', icon: 'music' },
-  { id: 'technical', name: 'Technical', icon: 'cpu' },
+  { id: 'tech', name: 'Technical', icon: 'cpu' },
   { id: 'sports', name: 'Sports', icon: 'activity' },
-  { id: 'club', name: 'Club Events', icon: 'users' },
-  { id: 'hackathon', name: 'Hackathons', icon: 'code' },
+  { id: 'competition', name: 'Competitions', icon: 'award' },
+  { id: 'social', name: 'Social', icon: 'heart' },
 ];
 
-// Campus Events Data
-const ALL_EVENTS: Event[] = [
-  {
-    id: '1',
-    title: 'AI/ML Workshop Series',
-    date: 'Sat, Dec 21',
-    time: '10:00 AM',
-    location: 'Computer Lab 301',
-    image: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800&q=80',
+// Format event from database to display format
+const formatEventForDisplay = (event: EventWithClub): Event => {
+  const eventDate = event.start_time ? new Date(event.start_time) : null;
+  return {
+    id: event.id,
+    title: event.title,
+    date: eventDate ? eventDate.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    }) : 'TBD',
+    time: eventDate ? eventDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }) : 'TBD',
+    location: event.venue || 'TBD',
+    image: event.image_url || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800&q=80',
     price: 'Free',
-    category: 'workshop',
-    attendees: 89,
-  },
-  {
-    id: '2',
-    title: 'CodeVerse Hackathon 2025',
-    date: 'Dec 22-23',
-    time: '9:00 AM',
-    location: 'Main Auditorium',
-    image: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&q=80',
-    price: 'Free',
-    category: 'hackathon',
-    attendees: 234,
-  },
-  {
-    id: '3',
-    title: 'Guest Lecture: Future of FinTech',
-    date: 'Mon, Dec 23',
-    time: '2:00 PM',
-    location: 'Seminar Hall A',
-    image: 'https://images.unsplash.com/photo-1560439514-4e9645039924?w=800&q=80',
-    price: 'Free',
-    category: 'seminar',
-    attendees: 156,
-  },
-  {
-    id: '4',
-    title: 'Annual Cultural Fest - Rhythm',
-    date: 'Dec 26-28',
-    time: '5:00 PM',
-    location: 'Open Air Theatre',
-    image: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&q=80',
-    price: 'Free',
-    category: 'cultural',
-    attendees: 1200,
-  },
-  {
-    id: '5',
-    title: 'Inter-College Basketball Tournament',
-    date: 'Dec 27',
-    time: '9:00 AM',
-    location: 'Sports Complex',
-    image: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&q=80',
-    price: 'Free',
-    category: 'sports',
-    attendees: 320,
-  },
-  {
-    id: '6',
-    title: 'Photography Club Exhibition',
-    date: 'Dec 28',
-    time: '11:00 AM',
-    location: 'Art Gallery',
-    image: 'https://images.unsplash.com/photo-1554048612-b6a482bc67e5?w=800&q=80',
-    price: 'Free',
-    category: 'club',
-    attendees: 78,
-  },
-  {
-    id: '7',
-    title: 'Cloud Computing Bootcamp',
-    date: 'Jan 02',
-    time: '10:00 AM',
-    location: 'IT Lab 201',
-    image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&q=80',
-    price: 'Free',
-    category: 'technical',
-    attendees: 67,
-  },
-  {
-    id: '8',
-    title: 'Entrepreneurship Summit',
-    date: 'Jan 05',
-    time: '9:30 AM',
-    location: 'Conference Hall',
-    image: 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=800&q=80',
-    price: 'Free',
-    category: 'seminar',
-    attendees: 245,
-  },
-];
+    category: event.category || 'event',
+    attendees: event.current_registrations || 0,
+    points: event.points_reward || 0,
+    organizer: event.clubs?.name || 'CampusPulse',
+  };
+};
 
 // Event Card Component
 function EventCard({ event, index }: { event: Event; index: number }) {
@@ -186,7 +127,11 @@ function EventCard({ event, index }: { event: Event; index: number }) {
           onPress={handlePress}
           style={styles.eventCardInner}
         >
-        <Image source={{ uri: event.image }} style={styles.eventImage} />
+        <Image
+          source={{ uri: event.image }}
+          style={styles.eventImage}
+          resizeMode="cover"
+        />
 
         <View style={styles.eventContent}>
           <View style={styles.eventHeader}>
@@ -205,6 +150,12 @@ function EventCard({ event, index }: { event: Event; index: number }) {
               <Feather name="calendar" size={12} color={tokens.colors.primary} />
               <Text style={styles.metaText}>{event.date} - {event.time}</Text>
             </View>
+            {event.organizer && (
+              <View style={styles.metaItem}>
+                <Feather name="users" size={12} color={tokens.colors.primary} />
+                <Text style={styles.metaTextOrganizer} numberOfLines={1}>{event.organizer}</Text>
+              </View>
+            )}
             <View style={styles.metaItem}>
               <Feather name="map-pin" size={12} color={tokens.colors.text.tertiary} />
               <Text style={styles.metaTextLight} numberOfLines={1}>{event.location}</Text>
@@ -213,16 +164,16 @@ function EventCard({ event, index }: { event: Event; index: number }) {
 
           <View style={styles.eventFooter}>
             <View style={styles.attendeesInfo}>
-              <View style={styles.avatarStack}>
-                {[1, 2, 3].map((i) => (
-                  <Image
-                    key={i}
-                    source={{ uri: `https://i.pravatar.cc/50?img=${i + event.attendees}` }}
-                    style={[styles.miniAvatar, { marginLeft: i > 1 ? -6 : 0 }]}
-                  />
-                ))}
+              <View style={styles.attendeesPill}>
+                <Feather name="users" size={11} color={tokens.colors.primary} />
+                <Text style={styles.attendeesText}>{event.attendees} going</Text>
               </View>
-              <Text style={styles.attendeesText}>+{event.attendees} going</Text>
+              {event.points && (
+                <View style={styles.pointsBadge}>
+                  <Feather name="award" size={10} color="#F59E0B" />
+                  <Text style={styles.pointsText}>+{event.points}</Text>
+                </View>
+              )}
             </View>
             <View style={styles.registerBadge}>
               <Text style={styles.registerText}>Register</Text>
@@ -244,8 +195,8 @@ function FilterModal({
 }: {
   visible: boolean;
   onClose: () => void;
-  selectedCategory: string;
-  onSelectCategory: (id: string) => void;
+  selectedCategory: EventCategory;
+  onSelectCategory: (id: EventCategory) => void;
 }) {
   const dateOptions = ['Today', 'Tomorrow', 'This Week', 'This Month', 'Any Time'];
   const [selectedDate, setSelectedDate] = useState('Any Time');
@@ -312,21 +263,47 @@ function FilterModal({
   );
 }
 
+// Category type from database schema
+type EventCategory = 'tech' | 'cultural' | 'sports' | 'workshop' | 'seminar' | 'competition' | 'social' | 'all';
+
 // Main Screen
 export default function ExploreScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState<EventCategory>('all');
   const [showFilters, setShowFilters] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [refreshing, setRefreshing] = useState(false);
 
-  const filteredEvents = ALL_EVENTS.filter((event) => {
-    const matchesSearch = event.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || event.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  // Real data hooks
+  const { events, isLoading, error, refresh, loadMore, hasMore } = useEvents(
+    selectedCategory === 'all' ? undefined : { category: selectedCategory }
+  );
+
+  // Format events for display
+  const displayEvents = useMemo(() => events.map(formatEventForDisplay), [events]);
+
+  // Filter by search query locally
+  const filteredEvents = useMemo(() => {
+    if (!searchQuery.trim()) return displayEvents;
+    return displayEvents.filter((event) =>
+      event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.organizer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.location.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [displayEvents, searchQuery]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  }, [refresh]);
+
+  const handleCategoryChange = useCallback((categoryId: EventCategory) => {
+    setSelectedCategory(categoryId);
+    setSearchQuery('');
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -362,12 +339,17 @@ export default function ExploreScreen() {
         </View>
 
         {/* Categories */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoriesScroll}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoriesScroll}
+          style={styles.categoriesContainer}
+        >
           {CATEGORIES.slice(0, 6).map((category) => (
             <Pressable
               key={category.id}
               style={[styles.categoryPill, selectedCategory === category.id && styles.categoryPillSelected]}
-              onPress={() => setSelectedCategory(category.id)}
+              onPress={() => handleCategoryChange(category.id)}
             >
               <Feather name={category.icon} size={14} color={selectedCategory === category.id ? '#FFFFFF' : tokens.colors.text.secondary} />
               <Text style={[styles.categoryPillText, selectedCategory === category.id && styles.categoryPillTextSelected]}>
@@ -377,91 +359,128 @@ export default function ExploreScreen() {
           ))}
         </ScrollView>
 
-        {/* Results Header */}
-        <View style={styles.resultsHeader}>
-          <Text style={styles.resultsCount}>{filteredEvents.length} Events Found</Text>
-          <View style={styles.viewToggle}>
-            <Pressable style={[styles.viewButton, viewMode === 'list' && styles.viewButtonActive]} onPress={() => setViewMode('list')}>
-              <Feather name="list" size={18} color={viewMode === 'list' ? tokens.colors.primary : tokens.colors.text.tertiary} />
-            </Pressable>
-            <Pressable style={[styles.viewButton, viewMode === 'grid' && styles.viewButtonActive]} onPress={() => setViewMode('grid')}>
-              <Feather name="grid" size={18} color={viewMode === 'grid' ? tokens.colors.primary : tokens.colors.text.tertiary} />
-            </Pressable>
+        {/* Main Scrollable Content */}
+        <ScrollView
+          style={styles.mainScroll}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.mainScrollContent, { paddingBottom: insets.bottom + 90 }]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={tokens.colors.primary}
+            />
+          }
+          onScroll={({ nativeEvent }) => {
+            const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+            const isEndReached = layoutMeasurement.height + contentOffset.y >= contentSize.height - 200;
+            if (isEndReached && hasMore && !isLoading) {
+              loadMore();
+            }
+          }}
+          scrollEventThrottle={400}
+        >
+          {/* Results Header */}
+          <View style={styles.resultsHeader}>
+            <Text style={styles.resultsCount}>{filteredEvents.length} Events Found</Text>
           </View>
-        </View>
 
-        {/* Events - Using flex: 1 container */}
-        <View style={{ flex: 1 }}>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.eventsList, { paddingBottom: insets.bottom + 100 }]}>
-            {filteredEvents.length > 0 ? (
-              filteredEvents.map((event, index) => <EventCard key={event.id} event={event} index={index} />)
-            ) : (
-              <View style={styles.emptyState}>
-                <Feather name="search" size={48} color={tokens.colors.text.tertiary} />
-                <Text style={styles.emptyTitle}>No Events Found</Text>
-                <Text style={styles.emptyText}>Try adjusting your search or filters</Text>
-              </View>
-            )}
-          </ScrollView>
-        </View>
+          {/* Loading State */}
+          {isLoading && filteredEvents.length === 0 ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={tokens.colors.primary} />
+              <Text style={styles.loadingText}>Loading events...</Text>
+            </View>
+          ) : (
+            /* Events List */
+            <View style={styles.eventsList}>
+              {filteredEvents.length > 0 ? (
+                filteredEvents.map((event, index) => <EventCard key={event.id} event={event} index={index} />)
+              ) : (
+                <View style={styles.emptyState}>
+                  <Feather name="search" size={48} color={tokens.colors.text.tertiary} />
+                  <Text style={styles.emptyTitle}>No Events Found</Text>
+                  <Text style={styles.emptyText}>Try adjusting your search or filters</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Load More Indicator */}
+          {isLoading && filteredEvents.length > 0 && (
+            <View style={styles.loadMoreContainer}>
+              <ActivityIndicator size="small" color={tokens.colors.primary} />
+            </View>
+          )}
+        </ScrollView>
       </SafeAreaView>
 
       <FilterModal
         visible={showFilters}
         onClose={() => setShowFilters(false)}
         selectedCategory={selectedCategory}
-        onSelectCategory={setSelectedCategory}
+        onSelectCategory={handleCategoryChange}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
   safeArea: { flex: 1 },
 
-  header: { paddingHorizontal: 20, paddingVertical: 12 },
-  headerTitle: { fontSize: 32, fontWeight: '700', color: tokens.colors.text.primary, letterSpacing: -0.5 },
+  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12, backgroundColor: '#FFFFFF' },
+  headerTitle: { fontSize: 32, fontWeight: '800', color: tokens.colors.text.primary, letterSpacing: -0.5 },
 
-  searchSection: { paddingHorizontal: 20, paddingBottom: 12 },
-  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F5', borderRadius: 12, paddingHorizontal: 16, height: 52, gap: 12, borderWidth: 2, borderColor: 'transparent' },
+  searchSection: { paddingHorizontal: 20, paddingBottom: 12, backgroundColor: '#FFFFFF' },
+  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F5', borderRadius: 14, paddingHorizontal: 16, height: 52, gap: 12, borderWidth: 2, borderColor: 'transparent' },
   searchBarFocused: { borderColor: tokens.colors.primary, backgroundColor: '#FFFFFF' },
   searchInput: { flex: 1, fontSize: 16, color: tokens.colors.text.primary },
   searchDivider: { width: 1, height: 24, backgroundColor: '#E0E0E0' },
-  filterIconButton: { width: 36, height: 36, borderRadius: 8, backgroundColor: '#FFF4F0', alignItems: 'center', justifyContent: 'center' },
+  filterIconButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#FFF4F0', alignItems: 'center', justifyContent: 'center' },
 
-  categoriesScroll: { paddingHorizontal: 20, paddingBottom: 8, gap: 10 },
-  categoryPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, height: 36, borderRadius: 18, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E0E0E0' },
+  categoriesContainer: { backgroundColor: '#FFFFFF', maxHeight: 64 },
+  categoriesScroll: { paddingHorizontal: 20, paddingVertical: 12, gap: 10 },
+  categoryPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, height: 40, borderRadius: 20, backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: '#E8E8E8' },
   categoryPillSelected: { backgroundColor: tokens.colors.primary, borderColor: tokens.colors.primary },
-  categoryPillText: { fontSize: 13, fontWeight: '500', color: tokens.colors.text.secondary },
+  categoryPillText: { fontSize: 13, fontWeight: '600', color: tokens.colors.text.secondary },
   categoryPillTextSelected: { color: '#FFFFFF' },
 
-  resultsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 8 },
-  resultsCount: { fontSize: 16, fontWeight: '600', color: tokens.colors.text.primary },
-  viewToggle: { flexDirection: 'row', backgroundColor: '#F5F5F5', borderRadius: 8, padding: 4 },
-  viewButton: { padding: 8, borderRadius: 6 },
-  viewButtonActive: { backgroundColor: '#FFFFFF' },
+  mainScroll: { flex: 1 },
+  mainScrollContent: {},
 
-  eventsList: { paddingHorizontal: 20, gap: 10 },
-  eventCard: { marginBottom: 2 },
-  eventCardInner: { flexDirection: 'row', backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#F0F0F0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
-  eventImage: { width: 100, height: 120, borderTopLeftRadius: 16, borderBottomLeftRadius: 16 },
-  eventContent: { flex: 1, padding: 12, justifyContent: 'space-between' },
-  eventHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  eventTitle: { flex: 1, fontSize: 15, fontWeight: '600', color: tokens.colors.text.primary, marginRight: 8 },
-  priceBadge: { backgroundColor: '#E8F5E9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  priceText: { fontSize: 11, fontWeight: '600', color: '#2E7D32' },
-  registerBadge: { backgroundColor: tokens.colors.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, marginLeft: 8 },
+  resultsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
+  resultsCount: { fontSize: 17, fontWeight: '700', color: tokens.colors.text.primary },
+  viewToggle: { flexDirection: 'row', backgroundColor: '#FFFFFF', borderRadius: 10, padding: 4, borderWidth: 1, borderColor: '#E8E8E8' },
+  viewButton: { padding: 8, borderRadius: 8 },
+  viewButtonActive: { backgroundColor: '#F5F5F5' },
+
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
+  loadingText: { fontSize: 14, color: tokens.colors.text.tertiary, marginTop: 12 },
+  loadMoreContainer: { paddingVertical: 20, alignItems: 'center' },
+
+  eventsList: { paddingHorizontal: 20, gap: 12 },
+  eventCard: { marginBottom: 4 },
+  eventCardInner: { flexDirection: 'row', backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#F0F0F0', shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 10, elevation: 4, minHeight: 140 },
+  eventImage: { width: 120, height: '100%', minHeight: 140 },
+  eventContent: { flex: 1, padding: 14, justifyContent: 'space-between' },
+  eventHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
+  eventTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: tokens.colors.text.primary, lineHeight: 20 },
+  priceBadge: { backgroundColor: '#E8F5E9', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  priceText: { fontSize: 12, fontWeight: '700', color: '#2E7D32' },
+  registerBadge: { backgroundColor: tokens.colors.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, flexShrink: 0, marginLeft: 8 },
   registerText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
   eventMeta: { gap: 4, marginTop: 6 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   metaText: { fontSize: 12, color: tokens.colors.text.secondary, fontWeight: '500' },
+  metaTextOrganizer: { fontSize: 12, color: tokens.colors.primary, fontWeight: '600', flex: 1 },
   metaTextLight: { fontSize: 12, color: tokens.colors.text.tertiary, flex: 1 },
-  eventFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
-  attendeesInfo: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
-  avatarStack: { flexDirection: 'row' },
-  miniAvatar: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: '#FFFFFF' },
-  attendeesText: { fontSize: 11, color: tokens.colors.text.tertiary, fontWeight: '500' },
+  eventFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, gap: 8 },
+  attendeesInfo: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, flexWrap: 'wrap' },
+  attendeesPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: tokens.colors.primaryLight, borderRadius: 999 },
+  attendeesText: { fontSize: 11, color: tokens.colors.primary, fontWeight: '600' },
+  pointsBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(245, 158, 11, 0.15)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, marginLeft: 4 },
+  pointsText: { fontSize: 11, fontWeight: '700', color: '#F59E0B' },
 
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
   emptyTitle: { fontSize: 18, fontWeight: '600', color: tokens.colors.text.primary, marginTop: 16 },

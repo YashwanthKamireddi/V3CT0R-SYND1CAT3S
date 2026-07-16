@@ -3,16 +3,10 @@
  * Custom tab bar with smooth animations and haptic feedback
  */
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Feather } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { View, Platform, StyleSheet } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { theme } from '@/lib/constants/theme';
@@ -26,29 +20,6 @@ interface TabBarIconProps {
 }
 
 function TabBarIcon({ name, color, focused }: TabBarIconProps) {
-  const scale = useSharedValue(1);
-  const dotOpacity = useSharedValue(0);
-
-  useEffect(() => {
-    scale.value = withTiming(focused ? 1.1 : 1, {
-      duration: 200,
-      easing: Easing.out(Easing.cubic),
-    });
-    dotOpacity.value = withTiming(focused ? 1 : 0, {
-      duration: 200,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, [focused]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const dotStyle = useAnimatedStyle(() => ({
-    opacity: dotOpacity.value,
-    transform: [{ scale: dotOpacity.value }],
-  }));
-
   const iconMap: Record<IconName, keyof typeof Feather.glyphMap> = {
     home: 'home',
     search: 'search',
@@ -58,22 +29,18 @@ function TabBarIcon({ name, color, focused }: TabBarIconProps) {
   };
 
   return (
-    <Animated.View style={[animatedStyle, styles.iconContainer]}>
-      <Feather name={iconMap[name]} size={24} color={color} />
-      <Animated.View style={[styles.activeDot, { backgroundColor: color }, dotStyle]} />
-    </Animated.View>
+    <View style={styles.iconContainer}>
+      <Feather name={iconMap[name]} size={20} color={color} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   iconContainer: {
     alignItems: 'center',
-  },
-  activeDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    marginTop: 4,
+    justifyContent: 'center',
+    width: 24,
+    height: 24,
   },
 });
 
@@ -94,31 +61,34 @@ export default function TabLayout() {
           bottom: 0,
           left: 0,
           right: 0,
-          height: theme.layout.tabBarHeight + insets.bottom + 8,
-          backgroundColor: theme.colors.background.primary,
-          borderTopWidth: 0,
-          paddingTop: theme.spacing.sm + 4,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : theme.spacing.sm + 4,
+          height: 56 + (insets.bottom > 0 ? insets.bottom : 10),
+          backgroundColor: '#FFFFFF',
+          borderTopWidth: 1,
+          borderTopColor: '#E8E8E8',
+          paddingTop: 6,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
+          paddingHorizontal: 8,
           ...Platform.select({
             ios: {
               shadowColor: '#000',
-              shadowOffset: { width: 0, height: -4 },
-              shadowOpacity: 0.08,
-              shadowRadius: 16,
+              shadowOffset: { width: 0, height: -2 },
+              shadowOpacity: 0.06,
+              shadowRadius: 8,
             },
             android: {
-              elevation: 16,
+              elevation: 8,
             },
           }),
         },
         headerShown: false,
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: '600',
-          marginTop: 2,
+          marginTop: 0,
+          marginBottom: 2,
         },
         tabBarItemStyle: {
-          gap: 2,
+          paddingVertical: 4,
         },
       }}
       screenListeners={{

@@ -25,20 +25,20 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { tokens } from '@/lib/styles/unified';
+import { useAuth } from '@/lib/context/AuthContext';
 
-// Initial user data (in production, fetch from API/state)
-const INITIAL_USER = {
-  name: 'Yashwanth Kamireddi',
-  email: 'yashwanth.k@gitam.in',
-  phone: '+91 63026 83827',
-  department: 'Computer Science & Engineering',
-  year: '2nd Year',
-  rollNo: '2023002748',
-  bio: 'Passionate about tech, hackathons, and building cool stuff!',
-  interests: ['Hackathons', 'AI/ML', 'Web Dev', 'Open Source'],
-  linkedin: 'linkedin.com/in/yashwanthk',
-  github: 'github.com/yashwanthk',
-  avatar: null,
+const EMPTY_USER = {
+  name: '',
+  email: '',
+  phone: '',
+  department: '',
+  year: '',
+  rollNo: '',
+  bio: '',
+  interests: [] as string[],
+  linkedin: '',
+  github: '',
+  avatar: null as string | null,
 };
 
 const DEPARTMENTS = [
@@ -73,11 +73,33 @@ const INTEREST_OPTIONS = [
 export default function EditProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user, profile, updateProfile } = useAuth();
 
-  const [formData, setFormData] = useState(INITIAL_USER);
+  const [formData, setFormData] = useState(EMPTY_USER);
   const [showDepartmentPicker, setShowDepartmentPicker] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+
+  // Pre-fill from real profile when it loads
+  React.useEffect(() => {
+    if (!profile) return;
+    setFormData({
+      name: profile.full_name ?? '',
+      email: profile.email ?? user?.email ?? '',
+      phone: profile.phone ?? '',
+      department: profile.branch ?? '',
+      year: profile.year ? `${profile.year}${
+        profile.year === 1 ? 'st' : profile.year === 2 ? 'nd' :
+        profile.year === 3 ? 'rd' : 'th'
+      } Year` : '',
+      rollNo: profile.student_id ?? '',
+      bio: profile.bio ?? '',
+      interests: (profile.interests as string[]) ?? [],
+      linkedin: '',
+      github: '',
+      avatar: profile.avatar_url ?? null,
+    });
+  }, [profile, user]);
 
   const updateField = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -91,8 +113,7 @@ export default function EditProfileScreen() {
     updateField('interests', newInterests);
   };
 
-  const handleSave = () => {
-    // Validate required fields
+  const handleSave = async () => {
     if (!formData.name.trim()) {
       Alert.alert('Error', 'Name is required');
       return;
@@ -101,8 +122,21 @@ export default function EditProfileScreen() {
       Alert.alert('Error', 'Email is required');
       return;
     }
-
-    // In production, save to API
+    const yearMatch = formData.year.match(/^(\d+)/);
+    const yearNum = yearMatch ? parseInt(yearMatch[1], 10) : null;
+    const result = await updateProfile({
+      full_name: formData.name,
+      phone: formData.phone || null,
+      branch: formData.department || null,
+      year: yearNum,
+      student_id: formData.rollNo || null,
+      bio: formData.bio || null,
+      interests: formData.interests,
+    });
+    if (!result.success) {
+      Alert.alert('Error', result.error ?? 'Failed to update profile');
+      return;
+    }
     Alert.alert(
       'Profile Updated',
       'Your profile has been updated successfully!',

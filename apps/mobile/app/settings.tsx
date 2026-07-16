@@ -144,6 +144,7 @@ export default function SettingsScreen() {
   // Toggle states
   const [notifications, setNotifications] = useState(true);
   const [eventReminders, setEventReminders] = useState(true);
+  const [pointsRewards, setPointsRewards] = useState(true);
   const [haptics, setHaptics] = useState(true);
   const [locationServices, setLocationServices] = useState(true);
 
@@ -219,6 +220,14 @@ export default function SettingsScreen() {
           icon: 'clock',
           type: 'toggle',
           value: eventReminders,
+        },
+        {
+          id: 'points',
+          title: 'Points & Rewards',
+          subtitle: 'Updates on points earned',
+          icon: 'award',
+          type: 'toggle',
+          value: pointsRewards,
         },
       ],
     },
@@ -330,6 +339,7 @@ export default function SettingsScreen() {
     switch (id) {
       case 'push': return notifications;
       case 'reminders': return eventReminders;
+      case 'points': return pointsRewards;
       case 'haptics': return haptics;
       case 'location': return locationServices;
       default: return false;
@@ -340,6 +350,7 @@ export default function SettingsScreen() {
     switch (id) {
       case 'push': setNotifications(value); break;
       case 'reminders': setEventReminders(value); break;
+      case 'points': setPointsRewards(value); break;
       case 'haptics': setHaptics(value); break;
       case 'location': setLocationServices(value); break;
     }
@@ -433,21 +444,21 @@ const styles = StyleSheet.create({
     paddingTop: scale(16),
   },
   backButton: {
-    width: scale(40),
-    height: scale(40),
-    borderRadius: scale(20),
+    width: scale(48),
+    height: scale(48),
+    borderRadius: scale(24),
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: normalize(20),
-    fontWeight: '700',
+    fontSize: normalize(24),
+    fontWeight: '800',
     color: tokens.colors.white,
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
   },
   headerSpacer: {
-    width: scale(40),
+    width: scale(48),
   },
   content: {
     flex: 1,
@@ -469,13 +480,13 @@ const styles = StyleSheet.create({
   },
   sectionCard: {
     backgroundColor: tokens.colors.surface.primary,
-    borderRadius: scale(16),
+    borderRadius: scale(20),
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
   settingRow: {
     flexDirection: 'row',
