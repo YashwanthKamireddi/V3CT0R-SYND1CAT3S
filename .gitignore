@@ -54,3 +54,5 @@ out/
 tmp/
 temp/
 *.tmp
+*.tsbuildinfo
+.venv/

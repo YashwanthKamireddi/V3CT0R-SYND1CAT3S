@@ -1,0 +1,277 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * CampusPulse Admin - Unified Design System
+ * Primary: #FF6B35 (Orange) - Matches mobile app
+ * This theme is designed to provide visual consistency across all CampusPulse platforms
+ */
+
+@layer base {
+  :root {
+    /* Base colors */
+    --background: 0 0% 99%;
+    --foreground: 228 45% 13%;
+
+    /* Card styling */
+    --card: 0 0% 100%;
+    --card-foreground: 228 45% 13%;
+
+    /* Popover styling */
+    --popover: 0 0% 100%;
+    --popover-foreground: 228 45% 13%;
+
+    /* Primary - CampusPulse Orange (#FF6B35) */
+    --primary: 17 100% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary - Warm gray tones */
+    --secondary: 30 14% 96%;
+    --secondary-foreground: 228 45% 13%;
+
+    /* Muted tones */
+    --muted: 30 14% 96%;
+    --muted-foreground: 220 9% 46%;
+
+    /* Accent - Subtle orange tint */
+    --accent: 17 100% 97%;
+    --accent-foreground: 17 100% 45%;
+
+    /* Destructive */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Border and input */
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 17 100% 60%;
+
+    /* Radius */
+    --radius: 0.625rem;
+
+    /* Chart colors - Harmonized palette */
+    --chart-1: 17 100% 60%;
+    --chart-2: 160 84% 39%;
+    --chart-3: 43 96% 56%;
+    --chart-4: 199 89% 48%;
+    --chart-5: 280 68% 60%;
+
+    /* Success, warning colors */
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+    --warning: 43 96% 56%;
+    --warning-foreground: 228 45% 13%;
+  }
+
+  .dark {
+    /* Dark mode base */
+    --background: 228 45% 6%;
+    --foreground: 210 40% 98%;
+
+    /* Dark card */
+    --card: 228 35% 9%;
+    --card-foreground: 210 40% 98%;
+
+    /* Dark popover */
+    --popover: 228 35% 9%;
+    --popover-foreground: 210 40% 98%;
+
+    /* Primary stays vibrant */
+    --primary: 17 100% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Dark secondary */
+    --secondary: 228 30% 15%;
+    --secondary-foreground: 210 40% 98%;
+
+    /* Dark muted */
+    --muted: 228 30% 15%;
+    --muted-foreground: 215 20% 65%;
+
+    /* Dark accent - subtle orange glow */
+    --accent: 17 50% 15%;
+    --accent-foreground: 17 100% 70%;
+
+    /* Dark destructive */
+    --destructive: 0 63% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Dark borders */
+    --border: 228 25% 18%;
+    --input: 228 25% 18%;
+    --ring: 17 100% 60%;
+
+    /* Dark chart colors */
+    --chart-1: 17 100% 65%;
+    --chart-2: 160 70% 50%;
+    --chart-3: 43 90% 60%;
+    --chart-4: 199 80% 55%;
+    --chart-5: 280 60% 65%;
+
+    /* Success, warning for dark */
+    --success: 160 70% 50%;
+    --success-foreground: 0 0% 100%;
+    --warning: 43 90% 60%;
+    --warning-foreground: 228 45% 6%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Custom utility classes for consistent styling */
+@layer utilities {
+  /* Gradient backgrounds */
+  .gradient-primary {
+    @apply bg-gradient-to-r from-[#FF6B35] to-[#FF8F65];
+  }
+
+  .gradient-primary-subtle {
+    @apply bg-gradient-to-r from-[#FFF0EB] to-[#FFECE4];
+  }
+
+  /* Hover effects */
+  .hover-lift {
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg;
+  }
+
+  /* Custom scrollbar */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/30;
+  }
+
+  /* Glass effect */
+  .glass {
+    @apply bg-white/70 dark:bg-card/70 backdrop-blur-xl border border-white/20 dark:border-white/10;
+  }
+
+  /* Status badges */
+  .status-upcoming {
+    @apply bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400;
+  }
+
+  .status-ongoing {
+    @apply bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400;
+  }
+
+  .status-completed {
+    @apply bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400;
+  }
+
+  .status-cancelled {
+    @apply bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400;
+  }
+
+  /* Animation classes */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Blob animation for login page */
+  .animate-blob {
+    animation: blob 7s infinite;
+  }
+
+  .animation-delay-2000 {
+    animation-delay: 2s;
+  }
+
+  .animation-delay-4000 {
+    animation-delay: 4s;
+  }
+
+  @keyframes blob {
+    0% {
+      transform: translate(0px, 0px) scale(1);
+    }
+    33% {
+      transform: translate(30px, -50px) scale(1.1);
+    }
+    66% {
+      transform: translate(-20px, 20px) scale(0.9);
+    }
+    100% {
+      transform: translate(0px, 0px) scale(1);
+    }
+  }
+
+  /* Card hover effects */
+  .card-interactive {
+    @apply transition-all duration-200 hover:shadow-md hover:border-primary/20;
+  }
+
+  /* HTML5 QR Code Scanner Styles */
+  #qr-reader {
+    width: 100% !important;
+    border: none !important;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  #qr-reader__dashboard {
+    padding: 16px !important;
+  }
+
+  #qr-reader__dashboard_section_csr button {
+    @apply bg-[#FF6B35] text-white font-medium px-4 py-2 rounded-lg hover:opacity-90 transition-opacity;
+    border: none !important;
+    outline: none !important;
+  }
+
+  #qr-reader__dashboard_section_swaplink {
+    @apply text-[#FF6B35] font-medium;
+    text-decoration: none !important;
+  }
+
+  #qr-reader__scan_region {
+    @apply rounded-lg overflow-hidden;
+  }
+
+  #qr-reader video {
+    @apply rounded-lg;
+  }
+
+  #qr-reader__camera_selection {
+    @apply rounded-lg border-slate-200 px-3 py-2;
+  }
+
+  #qr-reader__status_span {
+    @apply text-slate-500 text-sm;
+  }
+
+  #qr-reader img[alt="Info icon"] {
+    display: none !important;
+  }
+}

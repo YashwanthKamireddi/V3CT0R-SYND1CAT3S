@@ -1,0 +1,14 @@
+{
+  "name": "campuspulse-apps",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'Run a specific app: `npm run dev:mobile` (Expo) or `npm run dev:admin` (Next.js)'",
+    "dev:mobile": "cd mobile && npm start",
+    "dev:mobile:tunnel": "cd mobile && npx expo start --tunnel",
+    "dev:mobile:lan": "cd mobile && npx expo start --lan",
+    "dev:admin": "cd admin && npm run dev",
+    "build:mobile": "cd mobile && npx expo export",
+    "build:admin": "cd admin && npm run build",
+    "install:all": "cd mobile && npm install && cd ../admin && npm install"
+  }
+}

@@ -1,9 +1,10 @@
 /**
  * Ticket QR Code Display - CampusPulse
  * Shows the QR code for a specific ticket/registration
+ * Connected to real Supabase backend
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -12,6 +13,8 @@ import {
   Dimensions,
   Share,
   Platform,
+  ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,79 +31,76 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import QRCode from 'react-native-qrcode-svg';
 
 import { tokens } from '@/lib/styles/unified';
+import { supabase } from '@/lib/supabase/client';
+import { RegistrationWithEvent } from '@/lib/supabase/database.types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const QR_SIZE = SCREEN_WIDTH * 0.65;
 
-// Generate mock QR pattern (in production, use react-native-qrcode-svg)
-const QRPlaceholder = ({ size, data }: { size: number; data: string }) => {
-  const gridSize = 21; // Standard QR code is 21x21 for version 1
-  const cellSize = size / gridSize;
+type TicketStatus = 'active' | 'upcoming' | 'past' | 'cancelled';
 
-  // Generate pseudo-random pattern based on data
-  const pattern: boolean[][] = [];
-  let seed = data.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+interface FormattedTicket {
+  qrToken: string;
+  ticketNumber: string;
+  eventTitle: string;
+  date: string;
+  time: string;
+  location: string;
+  status: TicketStatus;
+}
 
-  for (let i = 0; i < gridSize; i++) {
-    pattern[i] = [];
-    for (let j = 0; j < gridSize; j++) {
-      // Keep finder patterns (corners)
-      if (
-        (i < 7 && j < 7) || // Top-left
-        (i < 7 && j >= gridSize - 7) || // Top-right
-        (i >= gridSize - 7 && j < 7) // Bottom-left
-      ) {
-        // Finder pattern
-        const inOuter = i < 7 && j < 7 ? (i === 0 || i === 6 || j === 0 || j === 6) :
-                        i < 7 && j >= gridSize - 7 ? (i === 0 || i === 6 || j === gridSize - 7 || j === gridSize - 1) :
-                        (i === gridSize - 7 || i === gridSize - 1 || j === 0 || j === 6);
-        const inInner = i < 7 && j < 7 ? (i >= 2 && i <= 4 && j >= 2 && j <= 4) :
-                        i < 7 && j >= gridSize - 7 ? (i >= 2 && i <= 4 && j >= gridSize - 5 && j <= gridSize - 3) :
-                        (i >= gridSize - 5 && i <= gridSize - 3 && j >= 2 && j <= 4);
-        pattern[i][j] = inOuter || inInner;
-      } else {
-        // Random data pattern
-        seed = (seed * 9301 + 49297) % 233280;
-        pattern[i][j] = seed / 233280 > 0.5;
-      }
-    }
+const formatRegistration = (reg: RegistrationWithEvent): FormattedTicket => {
+  const event = reg.events;
+  const eventDate = event?.date ? new Date(event.date) : new Date();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let status: TicketStatus = 'upcoming';
+  if (reg.status === 'cancelled') {
+    status = 'cancelled';
+  } else if (reg.checked_in) {
+    status = 'past';
+  } else if (eventDate < today) {
+    status = 'past';
+  } else if (eventDate.toDateString() === today.toDateString()) {
+    status = 'active';
   }
 
-  return (
-    <View style={[styles.qrContainer, { width: size, height: size }]}>
-      {pattern.map((row, i) => (
-        <View key={i} style={styles.qrRow}>
-          {row.map((cell, j) => (
-            <View
-              key={j}
-              style={[
-                styles.qrCell,
-                { width: cellSize, height: cellSize },
-                cell ? styles.qrCellFilled : styles.qrCellEmpty,
-              ]}
-            />
-          ))}
-        </View>
-      ))}
-    </View>
-  );
+  const qrToken = reg.qr_token || `GITAM-${reg.id.slice(0, 8).toUpperCase()}`;
+
+  return {
+    qrToken,
+    ticketNumber: qrToken,
+    eventTitle: event?.title || 'Unknown Event',
+    date: eventDate.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }),
+    time: eventDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }),
+    location: event?.venue || event?.location || 'TBD',
+    status,
+  };
 };
 
 export default function TicketQRScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams();
+  const params = useLocalSearchParams<{
+    registrationId?: string;
+    ticketNumber?: string;
+  }>();
 
-  const {
-    ticketNumber = 'CP-2025-0001',
-    eventTitle = 'CodeVerse Hackathon 2025',
-    date = 'Jan 25, 2025',
-    time = '9:00 AM',
-    location = 'Innovation Hub',
-    status = 'active',
-  } = params as Record<string, string>;
+  const [ticket, setTicket] = useState<FormattedTicket | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Animation for the glow effect
   const glowOpacity = useSharedValue(0.5);
@@ -115,19 +115,90 @@ export default function TicketQRScreen() {
     );
   }, []);
 
+  // Fetch registration data from Supabase
+  useEffect(() => {
+    let isCancelled = false;
+
+    const fetchTicket = async () => {
+      const registrationId = params.registrationId;
+      const qrToken = params.ticketNumber;
+
+      if (!registrationId && !qrToken) {
+        if (!isCancelled) {
+          setError('No ticket reference provided');
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        let query = supabase
+          .from('registrations')
+          .select(
+            `
+            *,
+            events (
+              *,
+              clubs (*)
+            )
+          `
+          );
+
+        if (registrationId) {
+          query = query.eq('id', registrationId);
+        } else if (qrToken) {
+          query = query.eq('qr_token', qrToken);
+        }
+
+        const { data, error: fetchError } = await query.maybeSingle();
+
+        if (isCancelled) return;
+
+        if (fetchError) {
+          setError(fetchError.message || 'Failed to load ticket');
+          setTicket(null);
+        } else if (!data) {
+          setError('Ticket not found');
+          setTicket(null);
+        } else {
+          setTicket(formatRegistration(data as unknown as RegistrationWithEvent));
+        }
+      } catch (err: any) {
+        if (!isCancelled) {
+          setError(err?.message || 'Failed to load ticket');
+          setTicket(null);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchTicket();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [params.registrationId, params.ticketNumber]);
+
   const glowStyle = useAnimatedStyle(() => ({
     opacity: glowOpacity.value,
   }));
 
   const handleShare = async () => {
+    if (!ticket) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       await Share.share({
-        message: `My ticket for ${eventTitle}\n\nTicket #: ${ticketNumber}\nDate: ${date}\nTime: ${time}\nLocation: ${location}\n\nGenerated by CampusPulse`,
+        message: `My ticket for ${ticket.eventTitle}\n\nTicket #: ${ticket.ticketNumber}\nDate: ${ticket.date}\nTime: ${ticket.time}\nLocation: ${ticket.location}\n\nGenerated by CampusPulse`,
         title: 'My Event Ticket',
       });
-    } catch (error) {
-      console.log('Share error:', error);
+    } catch (shareError) {
+      console.log('Share error:', shareError);
     }
   };
 
@@ -136,7 +207,64 @@ export default function TicketQRScreen() {
     router.back();
   };
 
-  const isActive = status === 'active' || status === 'upcoming';
+  // Loading state
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <LinearGradient
+          colors={[tokens.colors.primary, '#1a1a2e', '#000000']}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+          <Pressable style={styles.closeButton} onPress={handleClose}>
+            <Feather name="x" size={24} color="#FFFFFF" />
+          </Pressable>
+          <Text style={styles.headerTitle}>Event Pass</Text>
+          <View style={styles.shareButton} />
+        </View>
+        <View style={styles.centeredContent}>
+          <ActivityIndicator size="large" color="#FFFFFF" />
+          <Text style={styles.loadingText}>Loading your ticket...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Error state
+  if (error || !ticket) {
+    return (
+      <View style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <LinearGradient
+          colors={[tokens.colors.primary, '#1a1a2e', '#000000']}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+          <Pressable style={styles.closeButton} onPress={handleClose}>
+            <Feather name="x" size={24} color="#FFFFFF" />
+          </Pressable>
+          <Text style={styles.headerTitle}>Event Pass</Text>
+          <View style={styles.shareButton} />
+        </View>
+        <View style={styles.centeredContent}>
+          <View style={styles.errorIconCircle}>
+            <Feather name="alert-circle" size={40} color="#FFFFFF" />
+          </View>
+          <Text style={styles.errorTitle}>Ticket Not Found</Text>
+          <Text style={styles.errorMessage}>
+            {error || "We couldn't find this ticket. It may have been removed or the link is invalid."}
+          </Text>
+          <Pressable style={styles.errorButton} onPress={() => router.replace('/(tabs)/tickets')}>
+            <Feather name="arrow-left" size={18} color={tokens.colors.primary} />
+            <Text style={styles.errorButtonText}>Back to tickets</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  const isActive = ticket.status === 'active' || ticket.status === 'upcoming';
 
   return (
     <View style={styles.container}>
@@ -162,8 +290,12 @@ export default function TicketQRScreen() {
         </Pressable>
       </Animated.View>
 
-      {/* Main Content */}
-      <View style={styles.content}>
+      {/* Main Content (scrollable so the QR + details + instructions never get clipped) */}
+      <ScrollView
+        style={styles.contentScroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         {/* QR Code Card */}
         <Animated.View
           entering={FadeIn.delay(200).duration(500)}
@@ -172,31 +304,62 @@ export default function TicketQRScreen() {
           {/* Animated Glow */}
           <Animated.View style={[styles.qrGlow, glowStyle]} />
 
-          {/* QR Code */}
+          {/* Real QR Code */}
           <View style={styles.qrWrapper}>
-            <QRPlaceholder size={QR_SIZE} data={ticketNumber} />
+            <QRCode
+              value={ticket.qrToken}
+              size={QR_SIZE}
+              color="#000000"
+              backgroundColor="#FFFFFF"
+            />
           </View>
 
           {/* Ticket Number */}
           <View style={styles.ticketNumberContainer}>
             <Text style={styles.ticketLabel}>Ticket Number</Text>
-            <Text style={styles.ticketNumber}>{ticketNumber}</Text>
+            <Text style={styles.ticketNumber} numberOfLines={1}>
+              {ticket.ticketNumber}
+            </Text>
           </View>
 
           {/* Status Badge */}
-          <View style={[
-            styles.statusBadge,
-            { backgroundColor: isActive ? tokens.colors.successLight : tokens.colors.background.secondary }
-          ]}>
-            <View style={[
-              styles.statusDot,
-              { backgroundColor: isActive ? tokens.colors.success : tokens.colors.text.tertiary }
-            ]} />
-            <Text style={[
-              styles.statusText,
-              { color: isActive ? tokens.colors.success : tokens.colors.text.tertiary }
-            ]}>
-              {status === 'active' ? 'Active' : status === 'upcoming' ? 'Upcoming' : 'Used'}
+          <View
+            style={[
+              styles.statusBadge,
+              {
+                backgroundColor: isActive
+                  ? tokens.colors.successLight
+                  : tokens.colors.background.secondary,
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.statusDot,
+                {
+                  backgroundColor: isActive
+                    ? tokens.colors.success
+                    : tokens.colors.text.tertiary,
+                },
+              ]}
+            />
+            <Text
+              style={[
+                styles.statusText,
+                {
+                  color: isActive
+                    ? tokens.colors.success
+                    : tokens.colors.text.tertiary,
+                },
+              ]}
+            >
+              {ticket.status === 'active'
+                ? 'Active'
+                : ticket.status === 'upcoming'
+                ? 'Upcoming'
+                : ticket.status === 'cancelled'
+                ? 'Cancelled'
+                : 'Used'}
             </Text>
           </View>
         </Animated.View>
@@ -206,22 +369,22 @@ export default function TicketQRScreen() {
           entering={FadeInUp.delay(400).duration(400)}
           style={styles.eventDetails}
         >
-          <Text style={styles.eventTitle}>{eventTitle}</Text>
+          <Text style={styles.eventTitle}>{ticket.eventTitle}</Text>
 
           <View style={styles.detailsRow}>
             <View style={styles.detailItem}>
               <Feather name="calendar" size={16} color="rgba(255,255,255,0.6)" />
-              <Text style={styles.detailText}>{date}</Text>
+              <Text style={styles.detailText}>{ticket.date}</Text>
             </View>
             <View style={styles.detailItem}>
               <Feather name="clock" size={16} color="rgba(255,255,255,0.6)" />
-              <Text style={styles.detailText}>{time}</Text>
+              <Text style={styles.detailText}>{ticket.time}</Text>
             </View>
           </View>
 
           <View style={styles.detailItem}>
             <Feather name="map-pin" size={16} color="rgba(255,255,255,0.6)" />
-            <Text style={styles.detailText}>{location}</Text>
+            <Text style={styles.detailText}>{ticket.location}</Text>
           </View>
         </Animated.View>
 
@@ -235,12 +398,12 @@ export default function TicketQRScreen() {
             Show this QR code at the venue for check-in. Keep your screen brightness high for easy scanning.
           </Text>
         </Animated.View>
-      </View>
+      </ScrollView>
 
-      {/* Bottom Actions */}
+      {/* Bottom Actions — absolute footer so it overlays scroll content; ScrollView paddingBottom keeps text clear */}
       <Animated.View
         entering={FadeInUp.delay(800).duration(400)}
-        style={[styles.bottomSection, { paddingBottom: insets.bottom + 20 }]}
+        style={[styles.bottomSection, { paddingBottom: insets.bottom + 16 }]}
       >
         <Pressable style={styles.addToWalletButton}>
           <Feather name="credit-card" size={20} color={tokens.colors.primary} />
@@ -284,10 +447,63 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  content: {
+  contentScroll: {
     flex: 1,
+  },
+  content: {
     alignItems: 'center',
     paddingHorizontal: 20,
+    paddingBottom: 140, // clear the absolute "Add to Wallet" footer
+  },
+  centeredContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  loadingText: {
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 16,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  errorIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  errorTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.65)',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 28,
+  },
+  errorButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 14,
+  },
+  errorButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: tokens.colors.primary,
   },
   qrCard: {
     backgroundColor: '#FFFFFF',
@@ -313,25 +529,13 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     marginBottom: 20,
-  },
-  qrContainer: {
-    backgroundColor: '#FFFFFF',
-  },
-  qrRow: {
-    flexDirection: 'row',
-  },
-  qrCell: {
-    // Size set dynamically
-  },
-  qrCellFilled: {
-    backgroundColor: '#000000',
-  },
-  qrCellEmpty: {
-    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   ticketNumberContainer: {
     alignItems: 'center',
     marginBottom: 16,
+    maxWidth: '100%',
   },
   ticketLabel: {
     fontSize: 12,
@@ -342,10 +546,11 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   ticketNumber: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: tokens.colors.text.primary,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    paddingHorizontal: 12,
   },
   statusBadge: {
     flexDirection: 'row',
@@ -404,7 +609,13 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   bottomSection: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     paddingHorizontal: 20,
+    paddingTop: 12,
+    backgroundColor: 'rgba(0,0,0,0.65)',
   },
   addToWalletButton: {
     flexDirection: 'row',

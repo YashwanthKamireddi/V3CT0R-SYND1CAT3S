@@ -120,14 +120,12 @@ export interface EventRegistration {
   id: string;
   eventId: string;
   userId: string;
-  status: 'registered' | 'waitlisted' | 'attended' | 'cancelled' | 'no-show';
-  registeredAt: Date;
-  checkInTime?: Date;
-  qrCode: string; // Unique token
-  qrExpiry: Date;
-  notes?: string;
-  rating?: number;
-  feedback?: string;
+  status: 'pending' | 'confirmed' | 'waitlist' | 'cancelled';
+  checked_in: boolean;
+  check_in_time?: Date;
+  qr_token: string; // Unique token
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface EventConflict {

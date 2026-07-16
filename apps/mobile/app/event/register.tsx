@@ -3,7 +3,10 @@
  * Complete registration flow with form, confirmation, and success state
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { Alert } from 'react-native';
+import { useAuth } from '@/lib/context/AuthContext';
+import { registerForEvent } from '@/lib/services/registrationService';
 import {
   View,
   Text,
@@ -50,21 +53,42 @@ interface FormData {
 const YEAR_OPTIONS = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'PG'];
 
 export default function EventRegistrationScreen() {
-  const { id, title, date, location, points } = useLocalSearchParams();
+  const { id, eventId, title, date, location, points } = useLocalSearchParams();
+  const resolvedEventId = (Array.isArray(eventId) ? eventId[0] : eventId) ||
+    (Array.isArray(id) ? id[0] : id);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isNavigatingRef = useRef(false);
+  const { user, profile } = useAuth();
 
   const [step, setStep] = useState<RegistrationStep>('form');
   const [isLoading, setIsLoading] = useState(false);
+  const [registrationId, setRegistrationId] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>({
-    name: 'Yashwanth Kamireddi',
-    email: 'yashwanth.k@gitam.in',
-    phone: '+91 63026 83827',
-    department: 'Computer Science & Engineering',
-    year: '2nd Year',
-    rollNumber: '2023002748',
+    name: profile?.full_name ?? '',
+    email: profile?.email ?? '',
+    phone: profile?.phone ?? '',
+    department: profile?.branch ?? '',
+    year: profile?.year ? `${profile.year}${
+      profile.year === 1 ? 'st' : profile.year === 2 ? 'nd' :
+      profile.year === 3 ? 'rd' : 'th'
+    } Year` : '',
+    rollNumber: profile?.student_id ?? '',
   });
+
+  // Refresh form values when profile loads
+  useEffect(() => {
+    if (profile) {
+      setFormData((prev) => ({
+        name: prev.name || profile.full_name || '',
+        email: prev.email || profile.email || '',
+        phone: prev.phone || profile.phone || '',
+        department: prev.department || profile.branch || '',
+        year: prev.year || (profile.year ? `${profile.year} Year` : ''),
+        rollNumber: prev.rollNumber || profile.student_id || '',
+      }));
+    }
+  }, [profile]);
 
   const buttonScale = useSharedValue(1);
   const successScale = useSharedValue(0);
@@ -93,24 +117,34 @@ export default function EventRegistrationScreen() {
     if (step === 'form') {
       setStep('confirmation');
     } else if (step === 'confirmation') {
+      if (!user || !resolvedEventId) {
+        Alert.alert('Cannot register', 'You must be logged in and have an event id.');
+        return;
+      }
       setIsLoading(true);
-
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
+      const result = await registerForEvent(user.id, String(resolvedEventId));
       setIsLoading(false);
-      setStep('success');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      if (result.success && result.data) {
+        setRegistrationId(result.data.id);
+        setStep('success');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      } else {
+        Alert.alert('Registration failed', result.error ?? 'Please try again.');
+      }
     }
-  }, [step]);
+  }, [step, user, resolvedEventId]);
 
   const handleGoToTickets = useCallback(() => {
     if (isNavigatingRef.current) return;
     isNavigatingRef.current = true;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    router.replace('/(tabs)/tickets');
-  }, [router]);
+    if (registrationId) {
+      router.replace({ pathname: '/ticket-qr', params: { registrationId } });
+    } else {
+      router.replace('/(tabs)/tickets');
+    }
+  }, [router, registrationId]);
 
   const animatedButtonStyle = useAnimatedStyle(() => ({
     transform: [{ scale: buttonScale.value }],
@@ -403,26 +437,24 @@ export default function EventRegistrationScreen() {
         {step !== 'success' && (
           <Animated.View
             entering={FadeInUp.delay(300).duration(400)}
-            style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}
+            style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}
           >
-            <Animated.View style={[animatedButtonStyle, { flex: 1 }]}>
-              <Pressable
-                style={[styles.continueButton, isLoading && styles.continueButtonLoading]}
-                onPress={handleContinue}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Text style={styles.continueButtonText}>
-                      {step === 'form' ? 'Continue' : 'Confirm Registration'}
-                    </Text>
-                    <Feather name="arrow-right" size={20} color="#FFFFFF" />
-                  </>
-                )}
-              </Pressable>
-            </Animated.View>
+            <Pressable
+              style={[styles.continueButton, isLoading && styles.continueButtonLoading]}
+              onPress={handleContinue}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Text style={styles.continueButtonText}>
+                    {step === 'form' ? 'Continue' : 'Confirm Registration'}
+                  </Text>
+                  <Feather name="arrow-right" size={22} color="#FFFFFF" />
+                </>
+              )}
+            </Pressable>
           </Animated.View>
         )}
       </KeyboardAvoidingView>
@@ -433,14 +465,14 @@ export default function EventRegistrationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: tokens.colors.background.primary,
+    backgroundColor: tokens.colors.background.secondary,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 16,
     backgroundColor: tokens.colors.background.primary,
     borderBottomWidth: 1,
     borderBottomColor: tokens.colors.border.light,
@@ -454,32 +486,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerCenter: {
+    flex: 1,
     alignItems: 'center',
+    marginHorizontal: 8,
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     color: tokens.colors.text.primary,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   stepIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   stepDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: tokens.colors.border.default,
   },
   stepDotActive: {
     backgroundColor: tokens.colors.primary,
   },
   stepLine: {
-    width: 40,
-    height: 2,
+    width: 48,
+    height: 3,
     backgroundColor: tokens.colors.border.default,
-    marginHorizontal: 4,
+    marginHorizontal: 6,
+    borderRadius: 2,
   },
   stepLineActive: {
     backgroundColor: tokens.colors.primary,
@@ -489,14 +524,20 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
+    paddingBottom: 120,
   },
   eventCard: {
-    borderRadius: 20,
+    borderRadius: 24,
     overflow: 'hidden',
-    marginBottom: 24,
+    marginBottom: 28,
+    shadowColor: tokens.colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 5,
   },
   eventCardGradient: {
-    padding: 20,
+    padding: 24,
   },
   eventCardContent: {},
   eventCardTitle: {
@@ -534,116 +575,131 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: tokens.colors.text.primary,
-    marginBottom: 12,
+    marginBottom: 14,
+    letterSpacing: -0.2,
   },
   formCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
   inputGroup: {
-    marginBottom: 16,
+    marginBottom: 18,
   },
   inputRow: {
     flexDirection: 'row',
   },
   inputLabel: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '600',
     color: tokens.colors.text.secondary,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: tokens.colors.background.secondary,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    gap: 10,
-    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    gap: 12,
+    borderWidth: 1.5,
     borderColor: tokens.colors.border.light,
   },
   input: {
     flex: 1,
-    height: 48,
-    fontSize: 15,
+    height: 52,
+    fontSize: 16,
     color: tokens.colors.text.primary,
+    fontWeight: '500',
   },
   bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     paddingHorizontal: 20,
     paddingTop: 16,
     backgroundColor: tokens.colors.background.primary,
     borderTopWidth: 1,
     borderTopColor: tokens.colors.border.light,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 8,
   },
   continueButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 10,
     backgroundColor: tokens.colors.primary,
-    paddingVertical: 16,
-    borderRadius: 14,
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    minHeight: 56,
     shadowColor: tokens.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
   },
   continueButtonLoading: {
-    opacity: 0.8,
+    opacity: 0.85,
   },
   continueButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
   // Confirmation styles
   confirmCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 16,
+    borderRadius: 24,
+    padding: 28,
+    marginBottom: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 4,
   },
   confirmHeader: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 28,
   },
   confirmIconBg: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: tokens.colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   confirmTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
     color: tokens.colors.text.primary,
-    marginBottom: 4,
+    marginBottom: 6,
+    letterSpacing: -0.3,
   },
   confirmSubtitle: {
-    fontSize: 14,
+    fontSize: 15,
     color: tokens.colors.text.secondary,
   },
   confirmSection: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   confirmSectionTitle: {
     fontSize: 12,
@@ -686,16 +742,17 @@ const styles = StyleSheet.create({
   termsCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
+    gap: 14,
     backgroundColor: tokens.colors.infoLight,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 20,
   },
   termsText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 14,
     color: tokens.colors.info,
-    lineHeight: 18,
+    lineHeight: 20,
   },
   // Success styles
   successContainer: {

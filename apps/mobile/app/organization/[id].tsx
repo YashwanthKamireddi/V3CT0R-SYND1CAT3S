@@ -3,7 +3,7 @@
  * Complete organization page with events, about, reviews, and member list
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   Image,
   Share,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack, Link } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,6 +35,8 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { tokens } from '@/lib/styles/unified';
+import { supabase } from '@/lib/supabase/client';
+import type { Club, Event as DbEvent } from '@/lib/supabase/database.types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HEADER_HEIGHT = 180;
@@ -53,96 +56,60 @@ interface Event {
   image: string;
 }
 
-interface Review {
-  id: string;
-  user: {
-    name: string;
-    avatar: string;
-    department: string;
-  };
-  rating: number;
-  comment: string;
-  date: string;
-  helpful: number;
-}
+// Category → display color used for event badges and the avatar bg
+const CATEGORY_COLORS: Record<string, string> = {
+  workshop: '#3B82F6',
+  bootcamp: '#8B5CF6',
+  conference: '#F59E0B',
+  seminar: '#10B981',
+  competition: '#EF4444',
+  cultural: '#EC4899',
+  technical: '#6366F1',
+  tech: '#6366F1',
+  sports: '#F97316',
+  social: '#06B6D4',
+};
+const colorForCategory = (cat: string | null | undefined): string =>
+  CATEGORY_COLORS[(cat ?? '').toLowerCase()] || tokens.colors.primary;
 
-interface Member {
+const FALLBACK_COVER =
+  'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=1200&q=80';
+
+// Display shape used by the render layer (kept as-is to preserve UI)
+interface OrgDisplay {
   id: string;
   name: string;
-  avatar: string;
-  role: 'president' | 'vice-president' | 'coordinator' | 'member';
-  department: string;
-  joinedDate: string;
+  handle: string;
+  description: string;
+  logoUrl: string | null;
+  coverImage: string;
+  color: string;
+  followers: number;
+  rating: number;
+  reviewCount: number;
+  eventsHosted: number;
+  membersCount: number;
+  verified: boolean;
+  founded: string;
+  website: string;
+  email: string;
+  instagram: string;
+  achievements: { icon: string; title: string }[];
 }
 
-// Organization Data
-const ORGANIZATIONS: Record<string, any> = {
-  '1': {
-    id: '1',
-    name: 'Google Developer Student Club',
-    handle: '@gdsc_campus',
-    description: 'Official Google Developer Student Club. We build innovative solutions using Google technologies and host workshops, hackathons, and study jams throughout the year. Join us to learn Mobile, Web, Cloud, and ML technologies from industry experts and peers.',
-    avatar: '🚀',
-    coverImage: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=1200&q=80',
-    color: '#4285F4',
-    followers: 2340,
-    rating: 4.9,
-    reviewCount: 156,
-    eventsHosted: 42,
-    membersCount: 234,
-    isFollowing: false,
-    verified: true,
-    founded: 'September 2020',
-    website: 'gdsc.community.dev',
-    email: 'gdsc@university.edu',
-    instagram: '@gdsc_campus',
-    achievements: [
-      { icon: 'award', title: 'Top 10 GDSC India 2024' },
-      { icon: 'users', title: '1000+ Students Trained' },
-      { icon: 'code', title: '50+ Projects Built' },
-    ],
-  },
-  '2': {
-    id: '2',
-    name: 'Robotics Club',
-    handle: '@robotics_hub',
-    description: 'Building the future with robots and automation. We design, build, and compete with robots at national and international competitions. From beginners to advanced, everyone is welcome to explore the world of robotics.',
-    avatar: '🤖',
-    coverImage: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=1200&q=80',
-    color: '#FF6B6B',
-    followers: 1560,
-    rating: 4.7,
-    reviewCount: 89,
-    eventsHosted: 28,
-    membersCount: 156,
-    isFollowing: true,
-    verified: true,
-    founded: 'January 2019',
-    website: 'robotics.university.edu',
-    email: 'robotics@university.edu',
-    instagram: '@robotics_hub',
-    achievements: [
-      { icon: 'trophy', title: 'Robocon 2024 Finalists' },
-      { icon: 'cpu', title: '20+ Robots Built' },
-      { icon: 'award', title: 'Best Innovation Award' },
-    ],
-  },
-};
-
-const DEFAULT_ORG = {
+const DEFAULT_ORG: OrgDisplay = {
   id: '0',
   name: 'Organization',
   handle: '@organization',
   description: 'Organization details will appear here.',
-  avatar: '🎯',
-  coverImage: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=1200&q=80',
+  logoUrl: null,
+  coverImage: FALLBACK_COVER,
   color: tokens.colors.primary,
   followers: 0,
   rating: 0,
   reviewCount: 0,
   eventsHosted: 0,
   membersCount: 0,
-  isFollowing: false,
   verified: false,
   founded: '',
   website: '',
@@ -151,144 +118,73 @@ const DEFAULT_ORG = {
   achievements: [],
 };
 
-// Sample Events
-const EVENTS: Event[] = [
-  {
-    id: '1',
-    title: 'Cloud Study Jam - GCP Fundamentals',
-    date: 'Jan 20, 2026',
-    time: '2:00 PM',
-    location: 'Computer Lab 301',
-    category: 'Workshop',
-    categoryColor: '#3B82F6',
-    attendees: 35,
-    maxCapacity: 50,
-    image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&q=80',
-  },
-  {
-    id: '2',
-    title: 'Flutter Development Bootcamp',
-    date: 'Jan 25, 2026',
-    time: '10:00 AM',
-    location: 'Seminar Hall A',
-    category: 'Bootcamp',
-    categoryColor: '#8B5CF6',
-    attendees: 48,
-    maxCapacity: 50,
-    image: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=600&q=80',
-  },
-  {
-    id: '3',
-    title: 'DevFest 2026 - Annual Tech Fest',
-    date: 'Feb 15, 2026',
-    time: '9:00 AM',
-    location: 'Main Auditorium',
-    category: 'Conference',
-    categoryColor: '#F59E0B',
-    attendees: 320,
-    maxCapacity: 500,
-    image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600&q=80',
-  },
-];
+// Map a Supabase clubs row + its events into the OrgDisplay shape
+function clubToOrg(club: Club, eventsCount: number): OrgDisplay {
+  const social =
+    (club.social_links && typeof club.social_links === 'object'
+      ? (club.social_links as Record<string, unknown>)
+      : null) ?? null;
+  const instagramFromSocial =
+    social && typeof social.instagram === 'string'
+      ? (social.instagram as string)
+      : '';
+  const founded = club.created_at
+    ? new Date(club.created_at).toLocaleDateString('en-US', {
+        month: 'long',
+        year: 'numeric',
+      })
+    : '';
+  return {
+    id: club.id,
+    name: club.name,
+    handle: `@${club.slug ?? club.id.slice(0, 8)}`,
+    description: club.description ?? '',
+    logoUrl: club.logo_url ?? null,
+    coverImage: club.banner_url ?? club.logo_url ?? FALLBACK_COVER,
+    color: colorForCategory(club.category),
+    followers: club.member_count ?? 0,
+    rating: 0,
+    reviewCount: 0,
+    eventsHosted: eventsCount,
+    membersCount: club.member_count ?? 0,
+    verified: club.is_active ?? false,
+    founded,
+    website: club.website ?? '',
+    email: club.email ?? '',
+    instagram: instagramFromSocial,
+    achievements: [],
+  };
+}
 
-// Sample Reviews
-const REVIEWS: Review[] = [
-  {
-    id: '1',
-    user: {
-      name: 'Priya Sharma',
-      avatar: 'https://i.pravatar.cc/100?img=25',
-      department: 'Computer Science',
-    },
-    rating: 5,
-    comment: 'Amazing club! The workshops are super practical and the mentors are very helpful. I learned so much about cloud computing.',
-    date: '2 days ago',
-    helpful: 24,
-  },
-  {
-    id: '2',
-    user: {
-      name: 'Rahul Verma',
-      avatar: 'https://i.pravatar.cc/100?img=33',
-      department: 'Information Technology',
-    },
-    rating: 5,
-    comment: 'Best tech community on campus. The hackathons they organize are top-notch with great prizes and learning opportunities.',
-    date: '1 week ago',
-    helpful: 18,
-  },
-  {
-    id: '3',
-    user: {
-      name: 'Ananya Patel',
-      avatar: 'https://i.pravatar.cc/100?img=44',
-      department: 'Electronics',
-    },
-    rating: 4,
-    comment: 'Great events and friendly community. Would love to see more hardware-focused workshops.',
-    date: '2 weeks ago',
-    helpful: 12,
-  },
-];
-
-// Sample Members
-const MEMBERS: Member[] = [
-  {
-    id: '1',
-    name: 'Arjun Mehta',
-    avatar: 'https://i.pravatar.cc/100?img=11',
-    role: 'president',
-    department: 'Computer Science',
-    joinedDate: 'Aug 2023',
-  },
-  {
-    id: '2',
-    name: 'Sneha Iyer',
-    avatar: 'https://i.pravatar.cc/100?img=23',
-    role: 'vice-president',
-    department: 'IT',
-    joinedDate: 'Sep 2023',
-  },
-  {
-    id: '3',
-    name: 'Vikram Singh',
-    avatar: 'https://i.pravatar.cc/100?img=12',
-    role: 'coordinator',
-    department: 'CSE',
-    joinedDate: 'Oct 2023',
-  },
-  {
-    id: '4',
-    name: 'Kavya Nair',
-    avatar: 'https://i.pravatar.cc/100?img=32',
-    role: 'coordinator',
-    department: 'ECE',
-    joinedDate: 'Nov 2023',
-  },
-  {
-    id: '5',
-    name: 'Rohan Kumar',
-    avatar: 'https://i.pravatar.cc/100?img=15',
-    role: 'member',
-    department: 'CSE',
-    joinedDate: 'Dec 2023',
-  },
-  {
-    id: '6',
-    name: 'Ishita Gupta',
-    avatar: 'https://i.pravatar.cc/100?img=45',
-    role: 'member',
-    department: 'IT',
-    joinedDate: 'Jan 2024',
-  },
-];
-
-const roleColors = {
-  president: { bg: '#FEF3C7', text: '#92400E', label: 'President' },
-  'vice-president': { bg: '#E0E7FF', text: '#3730A3', label: 'Vice President' },
-  coordinator: { bg: tokens.colors.primaryLight, text: tokens.colors.primary, label: 'Coordinator' },
-  member: { bg: tokens.colors.background.secondary, text: tokens.colors.text.secondary, label: 'Member' },
-};
+// Map a Supabase events row into the local Event display shape
+function dbEventToEvent(e: DbEvent): Event {
+  const d = new Date(e.date);
+  const date = d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  const time = d.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+  const cat = e.category ?? 'event';
+  return {
+    id: e.id,
+    title: e.title,
+    date,
+    time,
+    location: e.location ?? e.venue ?? 'TBA',
+    category: cat.charAt(0).toUpperCase() + cat.slice(1),
+    categoryColor: colorForCategory(cat),
+    attendees: e.current_attendees ?? 0,
+    maxCapacity: e.max_attendees ?? 100,
+    image:
+      e.image_url ??
+      'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600&q=80',
+  };
+}
 
 // Event Card Component
 const EventCard = ({ event, index }: { event: Event; index: number }) => {
@@ -364,76 +260,6 @@ const EventCard = ({ event, index }: { event: Event; index: number }) => {
   );
 };
 
-// Review Card Component
-const ReviewCard = ({ review, index }: { review: Review; index: number }) => {
-  const [isHelpful, setIsHelpful] = useState(false);
-
-  return (
-    <Animated.View
-      entering={FadeInDown.delay(100 + index * 100).duration(400)}
-      style={styles.reviewCard}
-    >
-      <View style={styles.reviewHeader}>
-        <Image source={{ uri: review.user.avatar }} style={styles.reviewAvatar} />
-        <View style={styles.reviewUserInfo}>
-          <Text style={styles.reviewUserName}>{review.user.name}</Text>
-          <Text style={styles.reviewUserDept}>{review.user.department}</Text>
-        </View>
-        <View style={styles.reviewRating}>
-          {[1, 2, 3, 4, 5].map((star) => (
-            <Feather
-              key={star}
-              name="star"
-              size={14}
-              color={star <= review.rating ? '#F59E0B' : '#E5E7EB'}
-              style={{ marginLeft: star > 1 ? 2 : 0 }}
-            />
-          ))}
-        </View>
-      </View>
-      <Text style={styles.reviewComment}>{review.comment}</Text>
-      <View style={styles.reviewFooter}>
-        <Text style={styles.reviewDate}>{review.date}</Text>
-        <Pressable
-          style={[styles.helpfulButton, isHelpful && styles.helpfulButtonActive]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-            setIsHelpful(!isHelpful);
-          }}
-        >
-          <Feather name="thumbs-up" size={14} color={isHelpful ? tokens.colors.primary : tokens.colors.text.tertiary} />
-          <Text style={[styles.helpfulText, isHelpful && styles.helpfulTextActive]}>
-            Helpful ({isHelpful ? review.helpful + 1 : review.helpful})
-          </Text>
-        </Pressable>
-      </View>
-    </Animated.View>
-  );
-};
-
-// Member Card Component
-const MemberCard = ({ member, index }: { member: Member; index: number }) => {
-  const roleStyle = roleColors[member.role];
-
-  return (
-    <Animated.View
-      entering={FadeInDown.delay(100 + index * 80).duration(400)}
-      style={styles.memberCard}
-    >
-      <Image source={{ uri: member.avatar }} style={styles.memberAvatar} />
-      <View style={styles.memberInfo}>
-        <Text style={styles.memberName}>{member.name}</Text>
-        <Text style={styles.memberDept}>{member.department}</Text>
-      </View>
-      <View style={[styles.memberRoleBadge, { backgroundColor: roleStyle.bg }]}>
-        <Text style={[styles.memberRoleText, { color: roleStyle.text }]}>
-          {roleStyle.label}
-        </Text>
-      </View>
-    </Animated.View>
-  );
-};
-
 export default function OrganizationProfileScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
@@ -446,7 +272,58 @@ export default function OrganizationProfileScreen() {
   const scrollY = useSharedValue(0);
   const followScale = useSharedValue(1);
 
-  const org = ORGANIZATIONS[id as string] || DEFAULT_ORG;
+  const [org, setOrg] = useState<OrgDisplay>(DEFAULT_ORG);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const idParam = Array.isArray(id) ? id[0] : id;
+
+    async function load() {
+      if (!idParam) {
+        setIsLoading(false);
+        setNotFound(true);
+        return;
+      }
+      setIsLoading(true);
+      setNotFound(false);
+
+      const isUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          idParam,
+        );
+
+      const { data: club, error: clubErr } = isUuid
+        ? await supabase.from('clubs').select('*').eq('id', idParam).maybeSingle()
+        : await supabase.from('clubs').select('*').eq('slug', idParam).maybeSingle();
+
+      if (cancelled) return;
+      if (clubErr || !club) {
+        setIsLoading(false);
+        setNotFound(true);
+        return;
+      }
+
+      const { data: clubEvents } = await supabase
+        .from('events')
+        .select('*')
+        .eq('club_id', club.id)
+        .order('date', { ascending: true });
+
+      if (cancelled) return;
+      const mappedEvents = (clubEvents ?? []).map(dbEventToEvent);
+      setOrg(clubToOrg(club as Club, mappedEvents.length));
+      setEvents(mappedEvents);
+      setIsLoading(false);
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
@@ -518,10 +395,10 @@ export default function OrganizationProfileScreen() {
                 <Feather name="chevron-right" size={16} color={tokens.colors.primary} />
               </Pressable>
             </View>
-            {EVENTS.map((event, index) => (
+            {events.map((event, index) => (
               <EventCard key={event.id} event={event} index={index} />
             ))}
-            {EVENTS.length === 0 && (
+            {events.length === 0 && (
               <View style={styles.emptyState}>
                 <Feather name="calendar" size={48} color={tokens.colors.text.tertiary} />
                 <Text style={styles.emptyStateTitle}>No Upcoming Events</Text>
@@ -613,31 +490,13 @@ export default function OrganizationProfileScreen() {
       case 'reviews':
         return (
           <View style={styles.tabContent}>
-            <Animated.View entering={FadeInDown.duration(400)} style={styles.reviewsHeader}>
-              <View style={styles.ratingOverview}>
-                <Text style={styles.ratingBig}>{org.rating}</Text>
-                <View style={styles.ratingStars}>
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Feather
-                      key={star}
-                      name="star"
-                      size={16}
-                      color={star <= Math.round(org.rating) ? '#F59E0B' : '#E5E7EB'}
-                      style={{ marginRight: 2 }}
-                    />
-                  ))}
-                </View>
-                <Text style={styles.ratingCount}>{org.reviewCount} reviews</Text>
-              </View>
-              <Pressable style={styles.writeReviewButton}>
-                <Feather name="edit-2" size={16} color={tokens.colors.primary} />
-                <Text style={styles.writeReviewText}>Write Review</Text>
-              </Pressable>
-            </Animated.View>
-
-            {REVIEWS.map((review, index) => (
-              <ReviewCard key={review.id} review={review} index={index} />
-            ))}
+            <View style={styles.emptyState}>
+              <Feather name="message-circle" size={48} color={tokens.colors.text.tertiary} />
+              <Text style={styles.emptyStateTitle}>Reviews Coming Soon</Text>
+              <Text style={styles.emptyStateText}>
+                Member reviews and ratings will be available once the community grows.
+              </Text>
+            </View>
           </View>
         );
 
@@ -646,30 +505,14 @@ export default function OrganizationProfileScreen() {
           <View style={styles.tabContent}>
             <Animated.View entering={FadeInDown.duration(400)} style={styles.membersHeader}>
               <Text style={styles.membersTitle}>{org.membersCount} Members</Text>
-              <View style={styles.memberStats}>
-                <View style={styles.memberStatItem}>
-                  <Text style={styles.memberStatValue}>
-                    {MEMBERS.filter(m => m.role === 'coordinator' || m.role === 'president' || m.role === 'vice-president').length}
-                  </Text>
-                  <Text style={styles.memberStatLabel}>Core Team</Text>
-                </View>
-                <View style={styles.memberStatDivider} />
-                <View style={styles.memberStatItem}>
-                  <Text style={styles.memberStatValue}>{MEMBERS.filter(m => m.role === 'member').length}+</Text>
-                  <Text style={styles.memberStatLabel}>Members</Text>
-                </View>
-              </View>
             </Animated.View>
-
-            <Text style={styles.memberSectionTitle}>Core Team</Text>
-            {MEMBERS.filter(m => m.role !== 'member').map((member, index) => (
-              <MemberCard key={member.id} member={member} index={index} />
-            ))}
-
-            <Text style={[styles.memberSectionTitle, { marginTop: 24 }]}>Members</Text>
-            {MEMBERS.filter(m => m.role === 'member').map((member, index) => (
-              <MemberCard key={member.id} member={member} index={index + 4} />
-            ))}
+            <View style={styles.emptyState}>
+              <Feather name="users" size={48} color={tokens.colors.text.tertiary} />
+              <Text style={styles.emptyStateTitle}>Member Directory Coming Soon</Text>
+              <Text style={styles.emptyStateText}>
+                Core team and member listings will appear here.
+              </Text>
+            </View>
           </View>
         );
 
@@ -677,6 +520,40 @@ export default function OrganizationProfileScreen() {
         return null;
     }
   };
+
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={[styles.centerScreen, { paddingTop: insets.top }]}>
+          <ActivityIndicator size="large" color={tokens.colors.primary} />
+          <Text style={[styles.emptyStateText, { marginTop: 16 }]}>Loading club…</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (notFound) {
+    return (
+      <View style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={[styles.centerScreen, { paddingTop: insets.top }]}>
+          <Feather name="alert-circle" size={48} color={tokens.colors.text.tertiary} />
+          <Text style={[styles.emptyStateTitle, { marginTop: 16 }]}>Club not found</Text>
+          <Text style={[styles.emptyStateText, { textAlign: 'center', marginTop: 8 }]}>
+            This club may have been removed or the link is invalid.
+          </Text>
+          <Pressable
+            onPress={handleBack}
+            style={[styles.followButton, { marginTop: 20 }]}
+          >
+            <Feather name="arrow-left" size={16} color="#FFFFFF" />
+            <Text style={styles.followButtonText}>Go Back</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -723,7 +600,11 @@ export default function OrganizationProfileScreen() {
         <View style={styles.profileSection}>
           <View style={styles.profileHeader}>
             <View style={[styles.avatarContainer, { backgroundColor: org.color }]}>
-              <Text style={styles.avatarEmoji}>{org.avatar}</Text>
+              {org.logoUrl ? (
+                <Image source={{ uri: org.logoUrl }} style={styles.avatarImage} />
+              ) : (
+                <Feather name="users" size={36} color="#FFFFFF" />
+              )}
             </View>
             <Animated.View style={[followAnimatedStyle]}>
               <Pressable
@@ -902,6 +783,18 @@ const styles = StyleSheet.create({
   },
   avatarEmoji: {
     fontSize: 36,
+  },
+  avatarImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 16,
+    resizeMode: 'cover',
+  },
+  centerScreen: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
   },
   followButton: {
     flexDirection: 'row',

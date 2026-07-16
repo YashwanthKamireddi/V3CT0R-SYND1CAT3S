@@ -16,6 +16,7 @@ import {
   Image,
   ActivityIndicator,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,6 +37,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { tokens } from '@/lib/styles/unified';
+import { useAuth } from '@/lib/context/AuthContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -95,7 +97,7 @@ function ModernInput({
           onBlur={() => setIsFocused(false)}
         />
         {secureTextEntry && (
-          <Pressable 
+          <Pressable
             onPress={() => setShowPassword(!showPassword)}
             style={styles.eyeButton}
           >
@@ -108,8 +110,8 @@ function ModernInput({
         )}
       </View>
       {error && (
-        <Animated.Text 
-          entering={FadeInDown.duration(200)} 
+        <Animated.Text
+          entering={FadeInDown.duration(200)}
           style={styles.errorText}
         >
           {error}
@@ -170,13 +172,13 @@ function SocialButton({ type, onPress }: SocialButtonProps) {
 }
 
 // Checkbox Component
-function Checkbox({ 
-  checked, 
-  onToggle, 
-  label 
-}: { 
-  checked: boolean; 
-  onToggle: () => void; 
+function Checkbox({
+  checked,
+  onToggle,
+  label
+}: {
+  checked: boolean;
+  onToggle: () => void;
   label: string;
 }) {
   return (
@@ -192,11 +194,12 @@ function Checkbox({
 export default function AuthScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  
+  const { signIn, signUp, isLoading: authLoading } = useAuth();
+
   const [mode, setMode] = useState<AuthMode>('signin');
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  
+
   // Form state
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -266,9 +269,9 @@ export default function AuthScreen() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleAuth = useCallback(() => {
+  const handleAuth = useCallback(async () => {
     const isValid = mode === 'signin' ? validateSignIn() : validateSignUp();
-    
+
     if (!isValid) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
@@ -276,13 +279,45 @@ export default function AuthScreen() {
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
-    
-    setTimeout(() => {
+
+    try {
+      if (mode === 'signin') {
+        const result = await signIn({ email, password });
+
+        if (result.success) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          router.replace('/(tabs)');
+        } else {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          Alert.alert('Sign In Failed', result.error || 'Please check your credentials and try again.');
+        }
+      } else {
+        const result = await signUp({
+          email,
+          password,
+          fullName: name,
+          phone,
+        });
+
+        if (result.success) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          Alert.alert(
+            'Account Created!',
+            'Please check your email to verify your account.',
+            [{ text: 'OK', onPress: () => setMode('signin') }]
+          );
+        } else {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          Alert.alert('Sign Up Failed', result.error || 'Please try again.');
+        }
+      }
+    } catch (error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    } finally {
       setLoading(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace('/(tabs)');
-    }, 1500);
-  }, [mode, email, password, name, phone, confirmPassword, router]);
+    }
+  }, [mode, email, password, name, phone, signIn, signUp, router]);
 
   const handleSocialLogin = useCallback((provider: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -311,7 +346,7 @@ export default function AuthScreen() {
         end={{ x: 1, y: 1 }}
         style={[styles.headerGradient, { paddingTop: insets.top }]}
       >
-        <Animated.View 
+        <Animated.View
           entering={FadeInDown.delay(100).duration(500)}
           style={styles.headerContent}
         >
@@ -321,18 +356,18 @@ export default function AuthScreen() {
             <View style={[styles.patternCircle, styles.patternCircle2]} />
             <View style={[styles.patternCircle, styles.patternCircle3]} />
           </View>
-          
+
           {/* Logo */}
           <View style={styles.logoContainer}>
             <View style={styles.logoIcon}>
               <Feather name="zap" size={28} color={tokens.colors.primary} />
             </View>
           </View>
-          
+
           <Text style={styles.headerTitle}>CampusPulse</Text>
           <Text style={styles.headerSubtitle}>
-            {mode === 'signin' 
-              ? 'Welcome back! Sign in to continue' 
+            {mode === 'signin'
+              ? 'Welcome back! Sign in to continue'
               : 'Create your account to get started'}
           </Text>
         </Animated.View>
@@ -345,13 +380,13 @@ export default function AuthScreen() {
       >
         <View style={styles.contentCard}>
           {/* Tab Switcher */}
-          <Animated.View 
+          <Animated.View
             entering={FadeInDown.delay(200).duration(400)}
             style={styles.tabContainer}
           >
             <View style={styles.tabWrapper}>
               <Animated.View style={[styles.tabIndicator, tabIndicatorStyle]} />
-              <Pressable 
+              <Pressable
                 style={styles.tab}
                 onPress={() => switchMode('signin')}
               >
@@ -359,7 +394,7 @@ export default function AuthScreen() {
                   Sign In
                 </Text>
               </Pressable>
-              <Pressable 
+              <Pressable
                 style={styles.tab}
                 onPress={() => switchMode('signup')}
               >
@@ -408,7 +443,7 @@ export default function AuthScreen() {
                 />
 
                 <View style={styles.optionsRow}>
-                  <Checkbox 
+                  <Checkbox
                     checked={rememberMe}
                     onToggle={() => setRememberMe(!rememberMe)}
                     label="Remember me"
@@ -491,7 +526,7 @@ export default function AuthScreen() {
             )}
 
             {/* Primary Button */}
-            <Animated.View 
+            <Animated.View
               entering={FadeInDown.delay(400).duration(400)}
               style={styles.buttonContainer}
             >
@@ -524,7 +559,7 @@ export default function AuthScreen() {
             </Animated.View>
 
             {/* Divider */}
-            <Animated.View 
+            <Animated.View
               entering={FadeInDown.delay(500).duration(400)}
               style={styles.dividerContainer}
             >
@@ -534,7 +569,7 @@ export default function AuthScreen() {
             </Animated.View>
 
             {/* Social Buttons */}
-            <Animated.View 
+            <Animated.View
               entering={FadeInDown.delay(600).duration(400)}
               style={styles.socialContainer}
             >
@@ -545,7 +580,7 @@ export default function AuthScreen() {
 
             {/* Terms */}
             {mode === 'signup' && (
-              <Animated.View 
+              <Animated.View
                 entering={FadeInUp.delay(700).duration(400)}
                 style={styles.termsContainer}
               >
@@ -572,7 +607,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: tokens.colors.background.primary,
   },
-  
+
   // Header
   headerGradient: {
     paddingBottom: 40,

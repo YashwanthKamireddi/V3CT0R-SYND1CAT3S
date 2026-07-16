@@ -3,7 +3,7 @@
  * Beautiful notification center with event reminders and push notifications
  */
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -35,8 +35,45 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 
 import { tokens } from '@/lib/styles/unified';
+import { useNotifications } from '@/lib/hooks/useNotifications';
+import type { Notification as DbNotification } from '@/lib/supabase/database.types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Map DB notification → display notification shape
+function mapDbNotification(n: DbNotification): Notification {
+  const created = new Date(n.created_at ?? Date.now());
+  const diffMs = Date.now() - created.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  const time =
+    diffMin < 1 ? 'just now'
+    : diffMin < 60 ? `${diffMin}m ago`
+    : diffMin < 1440 ? `${Math.floor(diffMin / 60)}h ago`
+    : `${Math.floor(diffMin / 1440)}d ago`;
+  const validIcons: Array<keyof typeof Feather.glyphMap> = [
+    'bell', 'calendar', 'award', 'check-circle', 'trending-up', 'star', 'gift',
+  ];
+  const icon = (n.icon && validIcons.includes(n.icon as keyof typeof Feather.glyphMap)
+    ? n.icon
+    : 'bell') as keyof typeof Feather.glyphMap;
+  const type: Notification['type'] =
+    n.type === 'event' || n.type === 'reminder' || n.type === 'badge' ||
+    n.type === 'social' || n.type === 'alert'
+      ? n.type
+      : 'alert';
+  return {
+    id: n.id,
+    title: n.title,
+    message: n.message ?? '',
+    icon,
+    color: n.color ?? '#6366f1',
+    time,
+    timestamp: created,
+    unread: !n.is_read,
+    type,
+    eventId: n.event_id ?? undefined,
+  };
+}
 
 // Types
 interface Notification {
@@ -65,107 +102,10 @@ interface Reminder {
   notifyBefore: '24h' | '2h' | '30m';
 }
 
-// Mock Notifications
-const NOTIFICATIONS: Notification[] = [
-  {
-    id: '1',
-    title: 'Event Starting Soon!',
-    message: 'AI Workshop starts in 30 minutes. Don\'t forget to check in!',
-    icon: 'clock',
-    color: '#F59E0B',
-    time: '30m ago',
-    timestamp: new Date(Date.now() - 30 * 60 * 1000),
-    unread: true,
-    type: 'reminder',
-    eventId: '3',
-    actionLabel: 'View Event',
-  },
-  {
-    id: '2',
-    title: 'Registration Confirmed',
-    message: 'You\'re registered for CodeVerse Hackathon 2025. See you there!',
-    icon: 'check-circle',
-    color: '#10B981',
-    time: '2h ago',
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    unread: true,
-    type: 'event',
-    eventId: '1',
-  },
-  {
-    id: '3',
-    title: 'Certificate Ready! 🎉',
-    message: 'Your certificate for Music Fest is ready to download.',
-    icon: 'award',
-    color: '#F59E0B',
-    time: '1d ago',
-    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000),
-    unread: false,
-    type: 'badge',
-  },
-  {
-    id: '4',
-    title: 'New Badge Unlocked!',
-    message: 'You earned the "Event Explorer" badge for attending 5 events.',
-    icon: 'award',
-    color: '#7C3AED',
-    time: '2d ago',
-    timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-    unread: false,
-    type: 'badge',
-  },
-  {
-    id: '5',
-    title: 'New Event Alert',
-    message: 'GDSC just posted "Cloud Study Jam". Matches your interests!',
-    icon: 'bell',
-    color: '#3B82F6',
-    time: '3d ago',
-    timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-    unread: false,
-    type: 'alert',
-    eventId: '8',
-    actionLabel: 'Check it out',
-  },
-  {
-    id: '6',
-    title: 'Someone\'s Going Too!',
-    message: 'Your friend Arjun also registered for CodeVerse Hackathon.',
-    icon: 'users',
-    color: '#EC4899',
-    time: '3d ago',
-    timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-    unread: false,
-    type: 'social',
-    eventId: '1',
-  },
-];
+// (mock NOTIFICATIONS removed — using useNotifications hook)
 
-// Mock Upcoming Reminders
-const UPCOMING_REMINDERS: Reminder[] = [
-  {
-    id: 'r1',
-    eventTitle: 'AI/ML Workshop Series',
-    eventDate: 'Tomorrow',
-    eventTime: '10:00 AM',
-    location: 'Computer Lab 301',
-    timeUntil: 'in 18 hours',
-    color: '#FF6B35',
-    icon: 'cpu',
-    notifyBefore: '2h',
-  },
-  {
-    id: 'r2',
-    eventTitle: 'CodeVerse Hackathon 2025',
-    eventDate: 'Dec 22',
-    eventTime: '9:00 AM',
-    location: 'Main Auditorium',
-    timeUntil: 'in 2 days',
-    color: '#7C3AED',
-    icon: 'code',
-    notifyBefore: '24h',
-  },
-];
+// (mock UPCOMING_REMINDERS removed — replaced with real data from useReminders below)
+const UPCOMING_REMINDERS: Reminder[] = [];
 
 // Notification Item Component with Animated Unread Dot
 function NotificationItem({
@@ -445,13 +385,23 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'reminders'>('all');
-  const [notifications, setNotifications] = useState(NOTIFICATIONS);
+  const {
+    notifications: dbNotifications,
+    refresh,
+    markAsRead,
+    markAllAsRead,
+  } = useNotifications();
+  const notifications = useMemo(
+    () => dbNotifications.map(mapDbNotification),
+    [dbNotifications],
+  );
   const isNavigatingRef = useRef(false);
 
-  const onRefresh = useCallback(() => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1500);
-  }, []);
+    await refresh();
+    setRefreshing(false);
+  }, [refresh]);
 
   const unreadCount = notifications.filter((n) => n.unread).length;
   const reminderCount = notifications.filter((n) => n.type === 'reminder').length;
@@ -463,24 +413,15 @@ export default function NotificationsScreen() {
   });
 
   const handleMarkAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+    markAllAsRead();
   };
 
   const handleNotificationPress = (notification: Notification) => {
-    // Prevent multiple navigations
     if (isNavigatingRef.current) return;
-
-    // Mark as read
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === notification.id ? { ...n, unread: false } : n))
-    );
-
-    // Navigate if there's an associated event
+    markAsRead(notification.id);
     if (notification.eventId) {
       isNavigatingRef.current = true;
       router.push(`/event/${notification.eventId}`);
-
-      // Reset the flag after navigation completes
       setTimeout(() => {
         isNavigatingRef.current = false;
       }, 1000);
@@ -667,7 +608,7 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.colors.background.primary,
     borderBottomWidth: 1,
     borderBottomColor: tokens.colors.border.light,
-    paddingBottom: 12,
+    paddingBottom: 16,
   },
   headerTop: {
     flexDirection: 'row',
@@ -676,31 +617,31 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: tokens.colors.background.secondary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     flex: 1,
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
     color: tokens.colors.text.primary,
     marginLeft: 12,
   },
   markReadButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: tokens.colors.primaryLight,
     borderRadius: 20,
   },
   markReadText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: tokens.colors.primary,
   },
@@ -715,36 +656,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
     backgroundColor: tokens.colors.background.secondary,
+    borderWidth: 1,
+    borderColor: tokens.colors.border.light,
   },
   filterTabActive: {
     backgroundColor: tokens.colors.primary,
+    borderColor: tokens.colors.primary,
   },
   filterTabText: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '600',
     color: tokens.colors.text.secondary,
   },
   filterTabTextActive: {
     color: '#FFFFFF',
   },
   filterTabBadge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: tokens.colors.primary + '20',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
   },
   filterTabBadgeActive: {
     backgroundColor: 'rgba(255,255,255,0.25)',
   },
   filterTabBadgeText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: tokens.colors.primary,
   },
@@ -757,7 +701,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingTop: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
   },
 
   // Section
@@ -765,8 +710,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    marginBottom: 14,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    marginTop: 8,
   },
   sectionTitleRow: {
     flexDirection: 'row',
@@ -774,37 +720,37 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sectionTitle: {
-    fontSize: 17,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: tokens.colors.text.primary,
   },
   settingsButton: {
     padding: 8,
   },
   notificationCount: {
-    fontSize: 13,
+    fontSize: 12,
     color: tokens.colors.text.tertiary,
+    fontWeight: '500',
   },
 
   // Reminders - Premium Design
   remindersScroll: {
-    paddingHorizontal: 20,
-    gap: 14,
-    paddingBottom: 24,
+    paddingHorizontal: 16,
+    gap: 10,
+    paddingBottom: 16,
   },
   reminderCard: {
-    width: SCREEN_WIDTH * 0.75,
-    maxWidth: 300,
-    borderRadius: 24,
+    width: 250,
+    borderRadius: 18,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 5,
   },
   reminderGradient: {
-    padding: 20,
+    padding: 14,
     position: 'relative',
     overflow: 'hidden',
   },
@@ -824,13 +770,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 12,
     zIndex: 1,
   },
   reminderIconContainer: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     overflow: 'hidden',
   },
   reminderIconGradient: {
@@ -841,59 +787,59 @@ const styles = StyleSheet.create({
   reminderTimeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
   reminderTimeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: '#4ADE80',
     shadowColor: '#4ADE80',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
-    shadowRadius: 4,
+    shadowRadius: 3,
   },
   reminderTimeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   reminderTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 14,
-    letterSpacing: -0.3,
-    lineHeight: 24,
+    marginBottom: 12,
+    letterSpacing: -0.2,
+    lineHeight: 21,
     zIndex: 1,
   },
   reminderMeta: {
-    gap: 8,
-    marginBottom: 16,
+    gap: 6,
+    marginBottom: 12,
     zIndex: 1,
   },
   reminderMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   reminderMetaIconBg: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
+    width: 20,
+    height: 20,
+    borderRadius: 5,
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   reminderMetaText: {
-    fontSize: 13,
+    fontSize: 12,
     color: 'rgba(255,255,255,0.9)',
     flex: 1,
     fontWeight: '500',
@@ -907,103 +853,109 @@ const styles = StyleSheet.create({
   reminderBellBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
     elevation: 2,
   },
   reminderBellText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
   },
   reminderViewButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
   },
   reminderViewText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#FFFFFF',
   },
 
   // Notifications
   notificationsList: {
-    paddingHorizontal: 20,
-    gap: 1,
+    paddingHorizontal: 16,
+    gap: 10,
   },
   notificationItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     backgroundColor: tokens.colors.background.primary,
-    padding: 16,
+    padding: 14,
     borderRadius: 16,
-    marginBottom: 8,
     borderWidth: 1,
     borderColor: tokens.colors.border.light,
   },
   notificationItemUnread: {
-    backgroundColor: tokens.colors.primaryLight + '30',
-    borderColor: tokens.colors.primary + '20',
+    backgroundColor: tokens.colors.primaryLight + '40',
+    borderColor: tokens.colors.primary + '30',
   },
   notificationItemPressed: {
     opacity: 0.8,
     transform: [{ scale: 0.99 }],
   },
   notificationIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
   notificationContent: {
     flex: 1,
   },
   notificationHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 4,
+    gap: 8,
   },
   notificationTitle: {
-    fontSize: 15,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '600',
     color: tokens.colors.text.primary,
     flex: 1,
-    marginRight: 8,
+    lineHeight: 20,
   },
   notificationTitleUnread: {
     fontWeight: '700',
   },
   notificationTime: {
-    fontSize: 12,
+    fontSize: 11,
     color: tokens.colors.text.tertiary,
+    marginTop: 2,
   },
   notificationMessage: {
-    fontSize: 14,
+    fontSize: 13,
     color: tokens.colors.text.secondary,
-    lineHeight: 20,
+    lineHeight: 19,
   },
   notificationAction: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     marginTop: 10,
+    backgroundColor: tokens.colors.primaryLight,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    alignSelf: 'flex-start',
   },
   notificationActionText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: tokens.colors.primary,
   },
@@ -1039,28 +991,29 @@ const styles = StyleSheet.create({
   // Empty State
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 60,
+    paddingVertical: 50,
     paddingHorizontal: 40,
   },
   emptyIcon: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: tokens.colors.background.secondary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: tokens.colors.text.primary,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   emptySubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: tokens.colors.text.tertiary,
     textAlign: 'center',
+    lineHeight: 20,
   },
 
   // Footer

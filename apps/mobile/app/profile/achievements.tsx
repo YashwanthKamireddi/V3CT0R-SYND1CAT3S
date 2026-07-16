@@ -3,7 +3,7 @@
  * Display student badges, milestones, and accomplishments
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,8 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { tokens } from '@/lib/styles/unified';
+import { useAuth } from '@/lib/context/AuthContext';
+import { supabase } from '@/lib/supabase/client';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -133,13 +135,6 @@ const ACHIEVEMENTS: Achievement[] = [
   },
 ];
 
-const STATS = {
-  totalEarned: 4,
-  totalAvailable: 8,
-  eventsAttended: 18,
-  certificates: 8,
-};
-
 const rarityColors = {
   common: { bg: '#E8F5E9', text: '#4CAF50' },
   rare: { bg: '#E3F2FD', text: '#2196F3' },
@@ -147,12 +142,106 @@ const rarityColors = {
   legendary: { bg: '#FFF8E1', text: '#FF8F00' },
 };
 
+// Map requirement_value to a rarity bucket
+function rarityFor(reqValue: number | null | undefined): Achievement['rarity'] {
+  const v = reqValue ?? 0;
+  if (v >= 1000) return 'legendary';
+  if (v >= 100) return 'epic';
+  if (v >= 10) return 'rare';
+  return 'common';
+}
+
 export default function AchievementsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { profile } = useAuth();
 
-  const earnedAchievements = ACHIEVEMENTS.filter(a => a.earned);
-  const inProgressAchievements = ACHIEVEMENTS.filter(a => !a.earned);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [stats, setStats] = useState({
+    totalEarned: 0,
+    totalAvailable: 0,
+    campusPoints: 0,
+    campusRank: 0,
+  });
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const { data: allBadges } = await supabase
+        .from('badges')
+        .select('id, name, description, icon, color, requirement_type, requirement_value, is_active')
+        .eq('is_active', true);
+      const userId = profile?.id;
+      const { data: earned } = userId
+        ? await supabase
+            .from('user_badges')
+            .select('badge_id, earned_at')
+            .eq('user_id', userId)
+        : { data: [] as Array<{ badge_id: string; earned_at: string | null }> };
+
+      const earnedMap = new Map(
+        (earned ?? []).map((e) => [e.badge_id, e.earned_at]),
+      );
+
+      const totalPoints = profile?.total_points ?? 0;
+      const eventsAttended = profile?.events_attended ?? 0;
+
+      const list: Achievement[] = (allBadges ?? []).map((b) => {
+        const earnedAt = earnedMap.get(b.id);
+        const isEarned = !!earnedAt;
+        const reqValue = b.requirement_value ?? 0;
+        const progress =
+          b.requirement_type === 'events_attended'
+            ? Math.min(eventsAttended, reqValue)
+            : b.requirement_type === 'points_earned'
+              ? Math.min(totalPoints, reqValue)
+              : isEarned
+                ? reqValue
+                : 0;
+        return {
+          id: b.id,
+          title: b.name,
+          description: b.description ?? '',
+          icon: ((b.icon as keyof typeof Feather.glyphMap) ?? 'award'),
+          color: b.color ?? '#6366f1',
+          earned: isEarned,
+          earnedDate: earnedAt
+            ? new Date(earnedAt).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })
+            : undefined,
+          progress: reqValue > 0 ? progress : undefined,
+          maxProgress: reqValue > 0 ? reqValue : undefined,
+          rarity: rarityFor(reqValue),
+        };
+      });
+
+      // Get rank from leaderboard view
+      let rank = 0;
+      if (userId) {
+        const { data: lb } = await supabase
+          .from('leaderboard')
+          .select('id, rank')
+          .eq('id', userId)
+          .single();
+        rank = lb?.rank ?? 0;
+      }
+
+      setAchievements(list);
+      setStats({
+        totalEarned: list.filter((a) => a.earned).length,
+        totalAvailable: list.length,
+        campusPoints: totalPoints,
+        campusRank: rank,
+      });
+    };
+    fetchData();
+  }, [profile?.id, profile?.total_points, profile?.events_attended]);
+
+  const earnedAchievements = achievements.filter((a) => a.earned);
+  const inProgressAchievements = achievements.filter((a) => !a.earned);
+  const STATS = stats;
 
   return (
     <View style={styles.container}>
@@ -163,9 +252,15 @@ export default function AchievementsScreen() {
           headerStyle: { backgroundColor: tokens.colors.background.primary },
           headerTitleStyle: { color: tokens.colors.text.primary, fontWeight: '600' },
           headerShadowVisible: false,
+          headerBackVisible: false,
+          headerTintColor: tokens.colors.text.primary,
           headerLeft: () => (
-            <Pressable onPress={() => router.back()} style={styles.backButton}>
-              <Feather name="chevron-left" size={24} color={tokens.colors.text.primary} />
+            <Pressable
+              onPress={() => router.back()}
+              hitSlop={12}
+              style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.6 }]}
+            >
+              <Feather name="chevron-left" size={22} color={tokens.colors.text.primary} />
             </Pressable>
           ),
         }}
@@ -191,13 +286,13 @@ export default function AchievementsScreen() {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{STATS.eventsAttended}</Text>
-              <Text style={styles.statLabel}>Events Attended</Text>
+              <Text style={styles.statValue}>{STATS.campusPoints}</Text>
+              <Text style={styles.statLabel}>Campus Points</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{STATS.certificates}</Text>
-              <Text style={styles.statLabel}>Certificates</Text>
+              <Text style={styles.statValue}>#{STATS.campusRank}</Text>
+              <Text style={styles.statLabel}>Campus Rank</Text>
             </View>
           </View>
 
@@ -318,8 +413,13 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.colors.background.primary,
   },
   backButton: {
-    padding: 8,
-    marginLeft: -8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
   },
   scrollView: {
     flex: 1,
@@ -381,27 +481,27 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
     color: tokens.colors.text.primary,
-    marginBottom: 16,
+    marginBottom: 20,
   },
   achievementsGrid: {
-    gap: 12,
-    marginBottom: 28,
+    gap: 14,
+    marginBottom: 32,
   },
   achievementCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    gap: 14,
+    borderRadius: 20,
+    padding: 18,
+    gap: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
   lockedCard: {
     backgroundColor: tokens.colors.background.secondary,

@@ -27,5 +27,5 @@ export type { ChipSize, ChipVariant } from './Chip';
 export { Header, LargeHeader } from './Header';
 
 // Legacy components
-export { default as BentoCard } from './BentoCard';
-export { default as GlassView } from './GlassView';
+export { BentoCard } from './BentoCard';
+export { GlassView } from './GlassView';
